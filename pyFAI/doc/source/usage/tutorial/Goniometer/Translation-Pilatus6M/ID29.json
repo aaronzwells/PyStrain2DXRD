@@ -1,0 +1,50 @@
+{
+  "content": "Goniometer calibration v2",
+  "detector": "Pilatus 6M",
+  "detector_config": {
+    "orientation": 3
+  },
+  "wavelength": 9.72386e-11,
+  "param": [
+    -0.0011879346148879102,
+    1.001904706904089,
+    0.21548513632434602,
+    0.2130990512982539,
+    0.006612408557536195,
+    0.0028032884831129296
+  ],
+  "param_names": [
+    "dist_offset",
+    "dist_scale",
+    "poni1",
+    "poni2",
+    "rot1",
+    "rot2"
+  ],
+  "pos_names": [
+    "pos"
+  ],
+  "trans_function": {
+    "content": "GeometryTransformation",
+    "param_names": [
+      "dist_offset",
+      "dist_scale",
+      "poni1",
+      "poni2",
+      "rot1",
+      "rot2"
+    ],
+    "pos_names": [
+      "pos"
+    ],
+    "dist_expr": "pos * dist_scale + dist_offset",
+    "poni1_expr": "poni1",
+    "poni2_expr": "poni2",
+    "rot1_expr": "rot1",
+    "rot2_expr": "rot2",
+    "rot3_expr": "0.0",
+    "constants": {
+      "pi": 3.141592653589793
+    }
+  }
+}

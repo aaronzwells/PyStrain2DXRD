@@ -1,0 +1,14 @@
+# Nota: C-Order, 1 refers to the Y axis, 2 to the X axis
+# Calibration done on Thu Apr 17 16:55:41 2025
+poni_version: 2.1
+Detector: Detector
+Detector_config: {"pixel1": 0.00019999999999999998, "pixel2": 0.00019999999999999998, "max_shape": [2048, 2048], "orientation": 3}
+Distance: 1.148504596283495
+Poni1: 0.21905821815361887
+Poni2: 0.19670778950418005
+Rot1: -0.00674831548803252
+Rot2: -0.005125842699314006
+Rot3: 0.0
+Wavelength: 1.7298000700825772e-11
+# Calibrant: LaB6
+# Image: fabio:///Users/aaronwells/ResearchDocuments/Synchrotron_2025.02/pyFAI_analysis/calibration/ceria_lab6_exsitu_71p676keV_1145mm_100x100_3s_002265avg.tif
