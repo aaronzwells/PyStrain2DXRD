@@ -11,6 +11,7 @@ import pyFAI, fabio
 import warnings
 import logging
 import traceback
+import json
 
 
 # --- Utility: Removes the extension from a file name
@@ -482,3 +483,72 @@ def fit_lattice_cone_distortion(file_path, output_dir=None, chi_deg=None, dpi=60
     logger.info(f"Strain vs chi centroid data saved to: {strain_vs_chi_path}")
 
     return strain_array, strain_list, q0_list, strain_vs_chi_path
+
+# --- Utility: Generate strain maps from JSON ---------------------------------
+def generate_strain_maps_from_json(json_path, n_rows, n_cols, output_dir="StrainMaps", dpi=600, pixel_size=(1.0, 1.0), map_name_pfx="strain-map_", logger=None):
+    """
+    Generates and saves strain maps (ε_xx, ε_yy, ε_xy, and von Mises strain) from a JSON file 
+    containing a list of [eps_xx, eps_yy, eps_xy] per scan image.
+
+    Parameters:
+        json_path (str): Path to the JSON file.
+        n_rows (int): Number of rows in the scanned grid.
+        n_cols (int): Number of columns in the scanned grid.
+        output_dir (str): Directory to save the heatmaps.
+        dpi (int): Dots per inch for saved PNG images.
+        pixel_size (tuple): Tuple (x_size, y_size) for pixel size in desired units (e.g., mm).
+        logger (logging.Logger): Optional logger.
+    """
+
+    logger = logger or logging.getLogger(__name__)
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Load strain data
+    with open(json_path, 'r') as f:
+        strain_data = json.load(f)
+
+    # Extract the first ring's strain tensor from each image
+    filtered = []
+    for entry in strain_data:
+        tensors = entry.get("strain_tensor", [])
+        if tensors and isinstance(tensors[0], dict):
+            eps_xx = tensors[0].get("eps_xx", np.nan)
+            eps_yy = tensors[0].get("eps_yy", np.nan)
+            eps_xy = tensors[0].get("eps_xy", np.nan)
+            filtered.append([eps_xx, eps_yy, eps_xy])
+        else:
+            filtered.append([np.nan, np.nan, np.nan])
+
+    flat_array = np.array(filtered)
+    if flat_array.shape != (n_rows * n_cols, 3):
+        raise ValueError(f"Mismatch between parsed strain tensor array shape {flat_array.shape} and grid size ({n_rows} x {n_cols})")
+    strain_array = flat_array.reshape((n_rows, n_cols, 3))  # shape: [rows, cols, 3]
+    eps_xx = strain_array[:, :, 0]
+    eps_yy = strain_array[:, :, 1]
+    eps_xy = strain_array[:, :, 2]
+    eps_vm = np.sqrt(eps_xx**2 + eps_yy**2 - eps_xx*eps_yy + 3*eps_xy**2)
+
+    pixel_size_unit = "mm"
+
+    def plot_and_save(data, title, filename):
+        plt.figure(figsize=(6, 5), dpi=dpi)
+        im = plt.imshow(
+            data,
+            origin='lower',
+            cmap='viridis',
+            extent=[0, n_cols * pixel_size[0], 0, n_rows * pixel_size[1]]
+        )
+        plt.colorbar(im, label='Strain')
+        plt.title(title)
+        plt.xlabel(f'X Position [{pixel_size_unit}]')
+        plt.ylabel(f'Y Position [{pixel_size_unit}]')
+        plt.tight_layout()
+        filepath = os.path.join(output_dir, filename)
+        plt.savefig(filepath)
+        plt.close()
+        logger.info(f"{title} heatmap saved to: {filepath}")
+
+    plot_and_save(eps_xx, r'$\varepsilon_{xx}$', f"{map_name_pfx}_xx.png")
+    plot_and_save(eps_yy, r'$\varepsilon_{yy}$', f"{map_name_pfx}_yy.png")
+    plot_and_save(eps_xy, r'$\varepsilon_{xy}$', f"{map_name_pfx}_xy.png")
+    plot_and_save(eps_vm, r'$\varepsilon_{VM}$', f"{map_name_pfx}_Mises.png")
