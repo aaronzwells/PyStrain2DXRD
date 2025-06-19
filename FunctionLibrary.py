@@ -507,35 +507,32 @@ def generate_strain_maps_from_json(json_path, n_rows, n_cols, output_dir="Strain
     with open(json_path, 'r') as f:
         strain_data = json.load(f)
 
-    # Extract the first ring's strain tensor from each image
-    filtered = []
+    # Determine number of rings from first entry
+    num_rings = len(strain_data[0].get("strain_tensor", []))
+    filtered = [[] for _ in range(num_rings)]
+
     for entry in strain_data:
         tensors = entry.get("strain_tensor", [])
-        if tensors and isinstance(tensors[0], dict):
-            eps_xx = tensors[0].get("eps_xx", np.nan)
-            eps_yy = tensors[0].get("eps_yy", np.nan)
-            eps_xy = tensors[0].get("eps_xy", np.nan)
-            filtered.append([eps_xx, eps_yy, eps_xy])
-        else:
-            filtered.append([np.nan, np.nan, np.nan])
-
-    flat_array = np.array(filtered)
-    if flat_array.shape != (n_rows * n_cols, 3):
-        raise ValueError(f"Mismatch between parsed strain tensor array shape {flat_array.shape} and grid size ({n_rows} x {n_cols})")
-    strain_array = flat_array.reshape((n_rows, n_cols, 3))  # shape: [rows, cols, 3]
-    eps_xx = strain_array[:, :, 0]
-    eps_yy = strain_array[:, :, 1]
-    eps_xy = strain_array[:, :, 2]
-    eps_vm = np.sqrt(eps_xx**2 + eps_yy**2 - eps_xx*eps_yy + 3*eps_xy**2)
+        for i in range(num_rings):
+            if i < len(tensors) and isinstance(tensors[i], dict):
+                eps_xx = tensors[i].get("eps_xx", np.nan)
+                eps_yy = tensors[i].get("eps_yy", np.nan)
+                eps_xy = tensors[i].get("eps_xy", np.nan)
+                filtered[i].append([eps_xx, eps_yy, eps_xy])
+            else:
+                filtered[i].append([np.nan, np.nan, np.nan])
 
     pixel_size_unit = "mm"
 
     def plot_and_save(data, title, filename):
         plt.figure(figsize=(6, 5), dpi=dpi)
+        cmap = plt.cm.viridis.copy()
+        cmap.set_bad(color='white')
+        masked_data = np.ma.masked_invalid(data)
         im = plt.imshow(
-            data,
+            masked_data,
             origin='lower',
-            cmap='viridis',
+            cmap=cmap,
             extent=[0, n_cols * pixel_size[0], 0, n_rows * pixel_size[1]]
         )
         plt.colorbar(im, label='Strain')
@@ -548,7 +545,18 @@ def generate_strain_maps_from_json(json_path, n_rows, n_cols, output_dir="Strain
         plt.close()
         logger.info(f"{title} heatmap saved to: {filepath}")
 
-    plot_and_save(eps_xx, r'$\varepsilon_{xx}$', f"{map_name_pfx}_xx.png")
-    plot_and_save(eps_yy, r'$\varepsilon_{yy}$', f"{map_name_pfx}_yy.png")
-    plot_and_save(eps_xy, r'$\varepsilon_{xy}$', f"{map_name_pfx}_xy.png")
-    plot_and_save(eps_vm, r'$\varepsilon_{VM}$', f"{map_name_pfx}_Mises.png")
+    for ring_index, ring_data in enumerate(filtered):
+        flat_array = np.array(ring_data)
+        if flat_array.shape != (n_rows * n_cols, 3):
+            raise ValueError(f"Mismatch between parsed strain tensor array shape {flat_array.shape} and grid size ({n_rows} x {n_cols})")
+        strain_array = flat_array.reshape((n_rows, n_cols, 3))
+        eps_xx = strain_array[:, :, 0]
+        eps_yy = strain_array[:, :, 1]
+        eps_xy = strain_array[:, :, 2]
+        eps_vm = np.sqrt(eps_xx**2 + eps_yy**2 - eps_xx*eps_yy + 3*eps_xy**2)
+
+        ring_suffix = f"_ring{ring_index+1}"
+        plot_and_save(eps_xx, r'$\varepsilon_{xx}$', f"{map_name_pfx}_xx{ring_suffix}.png")
+        plot_and_save(eps_yy, r'$\varepsilon_{yy}$', f"{map_name_pfx}_yy{ring_suffix}.png")
+        plot_and_save(eps_xy, r'$\varepsilon_{xy}$', f"{map_name_pfx}_xy{ring_suffix}.png")
+        plot_and_save(eps_vm, r'$\varepsilon_{VM}$', f"{map_name_pfx}_Mises{ring_suffix}.png")
