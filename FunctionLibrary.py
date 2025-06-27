@@ -408,8 +408,8 @@ def fit_lattice_cone_distortion(file_path, output_dir=None, chi_deg=None, dpi=60
         mask = ~np.isnan(q_vals)
         x, y = chi_deg[mask], q_vals[mask]
 
-        if len(x) < 5:
-            logger.warning(f"Ring {i+1}: insufficient data points ({len(x)} < 5). Skipping fit.")
+        if len(x) < 20:
+            logger.warning(f"Ring {i+1}: insufficient data points ({len(x)} < 20). Skipping fit.")
             if plot:
                 ax = axes[i] if n_rings > 1 else axes[0]
                 ax.set_title(f"Ring {i+1}: insufficient data")
@@ -523,19 +523,28 @@ def generate_strain_maps_from_json(json_path, n_rows, n_cols, output_dir="Strain
                 filtered[i].append([np.nan, np.nan, np.nan])
 
     pixel_size_unit = "mm"
-
+    
+    from matplotlib.ticker import FuncFormatter
     def plot_and_save(data, title, filename):
+        x_shift = 0.2
         plt.figure(figsize=(6, 5), dpi=dpi)
-        cmap = plt.cm.viridis.copy()
+        cmap = plt.cm.jet.copy()
         cmap.set_bad(color='white')
         masked_data = np.ma.masked_invalid(data)
         im = plt.imshow(
             masked_data,
-            origin='lower',
+            origin='upper',
             cmap=cmap,
-            extent=[0, n_cols * pixel_size[0], 0, n_rows * pixel_size[1]]
+            vmin=-8.100e-04,
+            vmax= 7.900e-04,
+            extent=[-x_shift, n_cols * pixel_size[0] - x_shift, 0, n_rows * pixel_size[1]]
         )
-        plt.colorbar(im, label='Strain')
+        cb = plt.colorbar(im, ticks=np.linspace(-8.100e-04, 7.900e-04, num=8))
+        # cb = plt.colorbar(im, ticks=np.linspace(np.nanmin(masked_data), np.nanmax(masked_data), num=9))
+        cb.set_label('Strain')
+        cb.formatter = FuncFormatter(lambda x, _: f"{x:.3e}")
+        cb.update_ticks()
+        plt.xlim(0.0,0.6)
         plt.title(title)
         plt.xlabel(f'X Position [{pixel_size_unit}]')
         plt.ylabel(f'Y Position [{pixel_size_unit}]')
@@ -560,3 +569,14 @@ def generate_strain_maps_from_json(json_path, n_rows, n_cols, output_dir="Strain
         plot_and_save(eps_yy, r'$\varepsilon_{yy}$', f"{map_name_pfx}_yy{ring_suffix}.png")
         plot_and_save(eps_xy, r'$\varepsilon_{xy}$', f"{map_name_pfx}_xy{ring_suffix}.png")
         plot_and_save(eps_vm, r'$\varepsilon_{VM}$', f"{map_name_pfx}_Mises{ring_suffix}.png")
+
+    # Compute averaged strain maps
+    avg_eps_xx = np.nanmean([np.array(ring)[:, 0].reshape(n_rows, n_cols) for ring in filtered], axis=0)
+    avg_eps_yy = np.nanmean([np.array(ring)[:, 1].reshape(n_rows, n_cols) for ring in filtered], axis=0)
+    avg_eps_xy = np.nanmean([np.array(ring)[:, 2].reshape(n_rows, n_cols) for ring in filtered], axis=0)
+    avg_eps_vm = np.sqrt(avg_eps_xx**2 + avg_eps_yy**2 - avg_eps_xx*avg_eps_yy + 3*avg_eps_xy**2)
+
+    plot_and_save(avg_eps_xx, r'$\varepsilon_{xx}$ (Avg)', f"{map_name_pfx}_xx_avg.png")
+    plot_and_save(avg_eps_yy, r'$\varepsilon_{yy}$ (Avg)', f"{map_name_pfx}_yy_avg.png")
+    plot_and_save(avg_eps_xy, r'$\varepsilon_{xy}$ (Avg)', f"{map_name_pfx}_xy_avg.png")
+    plot_and_save(avg_eps_vm, r'$\varepsilon_{VM}$ (Avg)', f"{map_name_pfx}_Mises_avg.png")

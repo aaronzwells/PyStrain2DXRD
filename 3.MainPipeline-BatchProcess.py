@@ -9,12 +9,13 @@ from tqdm import tqdm
 import json
 import threading
 
-# Batch processing for all .tif files in InputFiles/AllInputs
+# Batch processing for all .tif files in InputFiles/AOInputs
 def batch_main_pipeline(input_dir="InputFiles/AOInputs", n_jobs=-1):
+    sampleName = "VB-APS-SSAO-6_800C"
     start_time = time.time()
     batch_time_suffix = time.strftime('%Y.%m.%d-%H.%M.%S', time.localtime(start_time))
     batch_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(start_time))
-    output_directory = fl.create_directory(f"OutputFiles_{batch_time_suffix}", logger=None)
+    output_directory = fl.create_directory(f"OutputFiles_Data_{sampleName}_{batch_time_suffix}", logger=None)
 
     log_file_path = os.path.join(output_directory, "BatchProcess.log")
     logger = setup_logger(log_file_path, logger_name="Batch")
