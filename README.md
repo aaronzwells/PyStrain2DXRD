@@ -92,6 +92,7 @@ Lines 13, 14, 35, 37-45
 * 'tol_array'
 
 ### Script 4a
+Lines 5-9
 * 'json_path'
 * 'sample_name'
 * 'n_rows'
