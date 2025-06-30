@@ -33,18 +33,18 @@ def setup_logger(log_path, logger_name=None):
 def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tensor_path=None):
     start_time = time.time()
     poni_file     = "calibration/Calibration_LaB6_100x100_3s_r8_mod2.poni"
-    tif_file      = tif_override or "InputFiles/800C_inputs/VB-APS-SSAO-6_800C_Map-AO_000998.avg.tiff"
+    tif_file      = tif_override or "InputFiles/800C_inputs/VB-APS-SSAO-6_800C_Map-AO_000993.avg.tiff"
     mask_thresh   = 4e2 # threshold value for the image mask
     num_azim_bins = 120 # number of azimuthal bins around the data
     q_min_nm1     = 14.0 # q_0 for binning of the data
     npt_rad       = 5000 # number of radial bins
-    delta_tol     = 0.1
-    # initial_q_guesses = [17.96, 24.50, 26.27, 29.97, 35.92, 39.02, 44.50, 45.51] # initial guesses for peak fitting [nm^-1] for Alumina
+    delta_tol     = 0.1 # default q-search width tolerance in nm^-1
+    initial_q_guesses = [17.86, 24.36, 26.12, 29.80, 35.73, 38.81, 44.26, 45.26] # initial guesses for peak fitting [nm^-1] for Alumina
     # initial_q_guesses = [17.96, 24.60, 26.36, 30.06, 36.05, 39.2, 44.50, 45.45] # initial guesses for peak fitting [nm^-1] for Ref Alumina
-    initial_q_guesses = [15.1, 19.7, 21.4, 23.2, 26.1, 30.2, 32.8, 33.8] # initial guesses for peak fitting [nm^-1] for calibrant
+    # initial_q_guesses = [15.1, 20.0, 21.3, 23.2, 26.1, 30.2, 32.8, 33.8] # initial guesses for peak fitting [nm^-1] for calibrant
     tol_array   = np.array([ # tolerance values for q when searching for a peak to fit [nm^-1] for Alumina
-        [0.1, 0.2, 0.2, 0.2, 0.1, 0.2, 0.2, 0.2], # larger q
-        [0.1, 0.2, 0.2, 0.2, 0.1, 0.2, 0.2, 0.2]]) # smaller q
+        [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1], # larger q
+        [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]]) # smaller q
     # tol_array   = np.array([ # tolerance values for q when searching for a peak to fit [nm^-1] for Ref Alumina
     #     [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.15, 0.15], # larger q
     #     [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.15, 0.15]]) # smaller q
