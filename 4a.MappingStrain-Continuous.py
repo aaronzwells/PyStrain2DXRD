@@ -2,10 +2,10 @@ import FunctionLibrary as fl
 import time
 
 def map_strain():
-    json_path = "OutputFiles_2025.06.19-09.39.47/strain_tensor_summary.json" # path to the json housing the strain data
-    sample_name = "VB-APS-SSAO-6_800C" # mapped sample name
-    n_rows = 21 # number of rows
-    n_cols = 4 # number of columns
+    json_path = "OutputFiles_Data_VB-APS-SSAO-6_25C_2025.06.30-17.22.55/strain_tensor_summary.json" # path to the json housing the strain data
+    sample_name = "VB-APS-SSAO-6_25C" # mapped sample name
+    n_rows = 44 # number of rows
+    n_cols = 8 # number of columns
     pixel_size = (0.1, 0.025) # (width, height) in mm
 
     start_time = time.time()
