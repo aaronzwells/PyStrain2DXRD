@@ -11,6 +11,7 @@ import pyFAI, fabio
 import warnings
 import logging
 import traceback
+import json
 
 
 # --- Utility: Removes the extension from a file name
@@ -407,8 +408,8 @@ def fit_lattice_cone_distortion(file_path, output_dir=None, chi_deg=None, dpi=60
         mask = ~np.isnan(q_vals)
         x, y = chi_deg[mask], q_vals[mask]
 
-        if len(x) < 5:
-            logger.warning(f"Ring {i+1}: insufficient data points ({len(x)} < 5). Skipping fit.")
+        if len(x) < 20:
+            logger.warning(f"Ring {i+1}: insufficient data points ({len(x)} < 20). Skipping fit.")
             if plot:
                 ax = axes[i] if n_rings > 1 else axes[0]
                 ax.set_title(f"Ring {i+1}: insufficient data")
@@ -482,3 +483,100 @@ def fit_lattice_cone_distortion(file_path, output_dir=None, chi_deg=None, dpi=60
     logger.info(f"Strain vs chi centroid data saved to: {strain_vs_chi_path}")
 
     return strain_array, strain_list, q0_list, strain_vs_chi_path
+
+# --- Utility: Generate strain maps from JSON ---------------------------------
+def generate_strain_maps_from_json(json_path, n_rows, n_cols, output_dir="StrainMaps", dpi=600, pixel_size=(1.0, 1.0), map_name_pfx="strain-map_", logger=None):
+    """
+    Generates and saves strain maps (ε_xx, ε_yy, ε_xy, and von Mises strain) from a JSON file 
+    containing a list of [eps_xx, eps_yy, eps_xy] per scan image.
+
+    Parameters:
+        json_path (str): Path to the JSON file.
+        n_rows (int): Number of rows in the scanned grid.
+        n_cols (int): Number of columns in the scanned grid.
+        output_dir (str): Directory to save the heatmaps.
+        dpi (int): Dots per inch for saved PNG images.
+        pixel_size (tuple): Tuple (x_size, y_size) for pixel size in desired units (e.g., mm).
+        logger (logging.Logger): Optional logger.
+    """
+
+    logger = logger or logging.getLogger(__name__)
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Load strain data
+    with open(json_path, 'r') as f:
+        strain_data = json.load(f)
+
+    # Determine number of rings from first entry
+    num_rings = len(strain_data[0].get("strain_tensor", []))
+    filtered = [[] for _ in range(num_rings)]
+
+    for entry in strain_data:
+        tensors = entry.get("strain_tensor", [])
+        for i in range(num_rings):
+            if i < len(tensors) and isinstance(tensors[i], dict):
+                eps_xx = tensors[i].get("eps_xx", np.nan)
+                eps_yy = tensors[i].get("eps_yy", np.nan)
+                eps_xy = tensors[i].get("eps_xy", np.nan)
+                filtered[i].append([eps_xx, eps_yy, eps_xy])
+            else:
+                filtered[i].append([np.nan, np.nan, np.nan])
+
+    pixel_size_unit = "mm"
+    
+    from matplotlib.ticker import FuncFormatter
+    def plot_and_save(data, title, filename):
+        x_shift = 0.2
+        plt.figure(figsize=(6, 5), dpi=dpi)
+        cmap = plt.cm.jet.copy()
+        cmap.set_bad(color='white')
+        masked_data = np.ma.masked_invalid(data)
+        im = plt.imshow(
+            masked_data,
+            origin='upper',
+            cmap=cmap,
+            vmin=-8.100e-04,
+            vmax= 7.900e-04,
+            extent=[-x_shift, n_cols * pixel_size[0] - x_shift, 0, n_rows * pixel_size[1]]
+        )
+        cb = plt.colorbar(im, ticks=np.linspace(-8.100e-04, 7.900e-04, num=8))
+        # cb = plt.colorbar(im, ticks=np.linspace(np.nanmin(masked_data), np.nanmax(masked_data), num=9))
+        cb.set_label('Strain')
+        cb.formatter = FuncFormatter(lambda x, _: f"{x:.3e}")
+        cb.update_ticks()
+        plt.xlim(0.0,0.6)
+        plt.title(title)
+        plt.xlabel(f'X Position [{pixel_size_unit}]')
+        plt.ylabel(f'Y Position [{pixel_size_unit}]')
+        plt.tight_layout()
+        filepath = os.path.join(output_dir, filename)
+        plt.savefig(filepath)
+        plt.close()
+        logger.info(f"{title} heatmap saved to: {filepath}")
+
+    for ring_index, ring_data in enumerate(filtered):
+        flat_array = np.array(ring_data)
+        if flat_array.shape != (n_rows * n_cols, 3):
+            raise ValueError(f"Mismatch between parsed strain tensor array shape {flat_array.shape} and grid size ({n_rows} x {n_cols})")
+        strain_array = flat_array.reshape((n_rows, n_cols, 3))
+        eps_xx = strain_array[:, :, 0]
+        eps_yy = strain_array[:, :, 1]
+        eps_xy = strain_array[:, :, 2]
+        eps_vm = np.sqrt(eps_xx**2 + eps_yy**2 - eps_xx*eps_yy + 3*eps_xy**2)
+
+        ring_suffix = f"_ring{ring_index+1}"
+        plot_and_save(eps_xx, r'$\varepsilon_{xx}$', f"{map_name_pfx}_xx{ring_suffix}.png")
+        plot_and_save(eps_yy, r'$\varepsilon_{yy}$', f"{map_name_pfx}_yy{ring_suffix}.png")
+        plot_and_save(eps_xy, r'$\varepsilon_{xy}$', f"{map_name_pfx}_xy{ring_suffix}.png")
+        plot_and_save(eps_vm, r'$\varepsilon_{VM}$', f"{map_name_pfx}_Mises{ring_suffix}.png")
+
+    # Compute averaged strain maps
+    avg_eps_xx = np.nanmean([np.array(ring)[:, 0].reshape(n_rows, n_cols) for ring in filtered], axis=0)
+    avg_eps_yy = np.nanmean([np.array(ring)[:, 1].reshape(n_rows, n_cols) for ring in filtered], axis=0)
+    avg_eps_xy = np.nanmean([np.array(ring)[:, 2].reshape(n_rows, n_cols) for ring in filtered], axis=0)
+    avg_eps_vm = np.sqrt(avg_eps_xx**2 + avg_eps_yy**2 - avg_eps_xx*avg_eps_yy + 3*avg_eps_xy**2)
+
+    plot_and_save(avg_eps_xx, r'$\varepsilon_{xx}$ (Avg)', f"{map_name_pfx}_xx_avg.png")
+    plot_and_save(avg_eps_yy, r'$\varepsilon_{yy}$ (Avg)', f"{map_name_pfx}_yy_avg.png")
+    plot_and_save(avg_eps_xy, r'$\varepsilon_{xy}$ (Avg)', f"{map_name_pfx}_xy_avg.png")
+    plot_and_save(avg_eps_vm, r'$\varepsilon_{VM}$ (Avg)', f"{map_name_pfx}_Mises_avg.png")

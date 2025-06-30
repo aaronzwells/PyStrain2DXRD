@@ -9,12 +9,13 @@ from tqdm import tqdm
 import json
 import threading
 
-# Batch processing for all .tif files in InputFiles/AllInputs
-def batch_main_pipeline(input_dir="InputFiles/AOInputs", n_jobs=-1):
+# Batch processing for all .tif files in InputFiles/AOInputs
+def batch_main_pipeline(input_dir="InputFiles/800C_Inputs", n_jobs=-1):
+    sampleName = "VB-APS-SSAO-6_800C"
     start_time = time.time()
     batch_time_suffix = time.strftime('%Y.%m.%d-%H.%M.%S', time.localtime(start_time))
     batch_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(start_time))
-    output_directory = fl.create_directory(f"OutputFiles_{batch_time_suffix}", logger=None)
+    output_directory = fl.create_directory(f"OutputFiles_Data_{sampleName}_{batch_time_suffix}", logger=None)
 
     log_file_path = os.path.join(output_directory, "BatchProcess.log")
     logger = setup_logger(log_file_path, logger_name="Batch")
@@ -38,7 +39,7 @@ def batch_main_pipeline(input_dir="InputFiles/AOInputs", n_jobs=-1):
             q_min_nm1     = 14.0
             npt_rad       = 5000
             delta_tol     = 0.1
-            initial_q_guesses = [17.96, 24.50, 26.27, 29.97, 35.92, 39.02, 44.50, 45.51]
+            initial_q_guesses = [17.86, 24.36, 26.12, 29.80, 35.73, 38.81, 44.26, 45.26]
             tol_array   = np.array([
                 [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
                 [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]])
