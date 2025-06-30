@@ -53,6 +53,7 @@ Using relative paths when updating script variables is <ins>accepted and encoura
 3. The third workflow script is '3.MainPipeline-BatchProcess.py'. This script is the main data  analysis script. It requires the same inputs as *Script 2*, though the input  should simply be the path to directory where the images for analysis will be held. This script  will output a significant amount of data housed in an 'OutputFiles_Data_*/' directory matching  the **user-defined** sample name prefix in the variable called 'SampleName'. 
 
 4. The final workflow script is either '4a.MappingStrain-Continuous.py' or  '4b.MappingStrain-nonContinuous.py'. These two scripts map the strain based upon  the generated data from *Script 3*. The outputs are saved to an output directory using the same  naming conventions as the outputs from *Script 3*. 
+
 [!CAUTION]
 *Script 4b* has not been completed yet. Do not use until finalized.
 
