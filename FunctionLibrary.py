@@ -3,14 +3,11 @@ import matplotlib.pyplot as plt
 from scipy.signal import find_peaks, peak_widths
 from scipy.optimize import curve_fit
 from numba import njit
-from joblib import Parallel, delayed
 from skimage import exposure
 import os
 import imageio.v2 as imageio
 import pyFAI, fabio
-import warnings
 import logging
-import traceback
 import json
 
 
@@ -368,7 +365,7 @@ def plot_strain_vs_chi_stacked(file_path, output_dir=None, chi_deg=None, dpi=600
         plt.close(fig)
         logger.info(f"Stacked strain vs chi plot saved to: {fig_filename}")
 
-# --- Compute full strain tensor ----------------------------------------
+# --- Compute full strain tensor (biaxial - components xx, yy, & xy) ----------------------------------------
 def fit_lattice_cone_distortion(file_path, output_dir=None, chi_deg=None, dpi=600, plot=True, logger=None):
     """
     Fits lattice cone distortion model to q(chi) data to extract in-plane strain tensor components.
@@ -477,6 +474,127 @@ def fit_lattice_cone_distortion(file_path, output_dir=None, chi_deg=None, dpi=60
 
     # Save the full strain vs chi array
     strain_vs_chi = (np.array(q0_list).reshape(-1, 1) - q_data) / np.array(q0_list).reshape(-1, 1)
+    strain_vs_chi_path = os.path.join(output_dir, "strain_vs_chi_peaks.txt")
+    np.savetxt(strain_vs_chi_path, strain_vs_chi, fmt="%.6e", delimiter="\t",
+               header="Rows = diffraction rings; Columns = azimuthal bins (strain vs chi data)")
+    logger.info(f"Strain vs chi centroid data saved to: {strain_vs_chi_path}")
+
+    return strain_array, strain_list, q0_list, strain_vs_chi_path
+
+# --- Compute full strain tensor (biaxial - components xx, yy, & xy) ----------------------------------------
+def fit_lattice_cone_distortion_w_shear(file_path, output_dir=None, chi_deg=None, dpi=600, plot=True, logger=None):
+    """
+    Fits lattice cone distortion model to q(chi) data to extract in-plane strain tensor components.
+
+    Parameters:
+        file_path (str): Path to q_vs_chi_peaks.txt
+        output_dir (str): Where to save the combined plot and results
+        chi_deg (array-like, optional): Azimuthal angles in degrees. If None, assumes uniform [0, 360).
+
+    Returns:
+        strain_params (ndarray): Array of [eps_xx, eps_yy, eps_xy] per ring
+    """
+    logger = logger or logging.getLogger(__name__)
+    import os
+    os.makedirs(output_dir, exist_ok=True)
+
+    q_data = np.loadtxt(file_path, comments='#', delimiter='\t')
+    n_rings, n_bins = q_data.shape
+
+    if chi_deg is None:
+        chi_deg = np.linspace(0, 360, n_bins, endpoint=False)
+
+    def distortion_model(chi_deg, q0, eps_xx, eps_yy, eps_xy, eps_xz, eps_yz):
+        chi_rad = np.deg2rad(chi_deg)
+        eps = eps_xx * np.cos(chi_rad)**2 + eps_yy * np.sin(chi_rad)**2 + eps_xy * np.sin(2 * chi_rad) + eps_xz * np.cos(chi_rad) + eps_yz * np.sin(chi_rad)
+        return q0 * (1 - eps)
+
+    strain_params = []
+    axes = None
+    if plot:
+        fig, axes = plt.subplots(n_rings, 1, figsize=(10, 2 * n_rings), dpi=dpi, sharex=True)
+        if n_rings == 1:
+            axes = [axes]
+
+    for i in range(n_rings):
+        q_vals = q_data[i]
+        mask = ~np.isnan(q_vals)
+        x, y = chi_deg[mask], q_vals[mask]
+
+        if len(x) < 20:
+            logger.warning(f"Ring {i+1}: insufficient data points ({len(x)} < 20). Skipping fit.")
+            if plot:
+                ax = axes[i] if n_rings > 1 else axes[0]
+                ax.set_title(f"Ring {i+1}: insufficient data")
+                ax.axis('off')
+            strain_params.append([np.nan]*3)
+            continue
+
+        p0 = [np.mean(y), 0, 0, 0, 0, 0]
+        try:
+            popt, _ = curve_fit(distortion_model, x, y, p0=p0)
+            q0, eps_xx, eps_yy, eps_xy, eps_xz, eps_yz = popt
+            y_fit = distortion_model(x, *popt)
+            # Compute residuals standard deviation
+            residuals_std = np.std(y - y_fit)
+            strain_params.append([q0, eps_xx, eps_yy, eps_xy, eps_xz, eps_yz])
+            if plot:
+                ax = axes[i] if n_rings > 1 else axes[0]
+                ax.plot(x, y, '.', markersize=3, label='Centroid Data')
+                ax.plot(
+                    x, y_fit, '-',
+                    label=f'ε_xx={eps_xx:.3e}, \nε_yy={eps_yy:.3e}, \nε_xy={eps_xy:.3e} \nStd(res)={residuals_std:.2e}'
+                )
+                # ax.set_xlabel('Azimuth χ (°)')
+                ax.set_ylabel('q (nm⁻¹)')
+                ax.set_title(f'Ring {i+1}')
+                ax.legend(fontsize='small')
+                ax.legend(loc='lower left', bbox_to_anchor=(1.02,0.02), ncol=1)
+        except Exception:
+            if plot:
+                ax = axes[i] if n_rings > 1 else axes[0]
+                ax.set_title(f"Ring {i+1}: fit failed")
+                ax.axis('off')
+            strain_params.append([np.nan, np.nan, np.nan, np.nan, np.nan, np.nan])
+            logger.exception(f"Fit failed for Ring {i+1}")
+            raise
+
+    if plot:
+        axes[-1].set_xlabel('Azimuth χ (°)')
+        fig.tight_layout()
+        fig_path = os.path.join(output_dir, "q_vs_chi_plot_fitted.png")
+        fig.savefig(fig_path)
+        plt.close(fig)
+        logger.info(f"Combined distortion fit plot saved to: {fig_path}")
+
+    # Convert strain_params to numpy array and save (only the tensor components, not q0)
+    strain_array = np.array([row[1:4] if row is not None and len(row) > 3 else [np.nan, np.nan, np.nan] for row in strain_params])
+    # out_txt = os.path.join(output_dir, "strain_tensor_components.txt")
+    # np.savetxt(out_txt, strain_array, header="Columns: eps_xx eps_yy eps_xy", fmt="%.6e", delimiter="\t")
+    # logger.info(f"Strain tensor components saved to: {out_txt}")
+
+    # Compute strain_list as described, with improved NaN handling
+    strain_list = []
+    for i, row in enumerate(q_data):
+        mask = ~np.isnan(row)
+        filtered_row = row[mask]
+        q_avg = np.mean(filtered_row) if np.any(mask) else np.nan
+        q0 = strain_params[i][0] if i < len(strain_params) and strain_params[i] is not None else np.nan
+        if q0 != 0 and not np.isnan(q0) and not np.isnan(q_avg):
+            strain = (q0 - q_avg) / q0
+        else:
+            strain = np.nan
+        strain_list.append(strain)
+
+    # Extract q0_list for all rings
+    q0_list = [row[0] if row is not None and len(row) > 0 else np.nan for row in strain_params]
+
+    # Save the full strain vs chi array
+    q0_arr = np.array(q0_list)
+    valid_mask = (q0_arr != 0) & ~np.isnan(q0_arr)
+    q0_arr[~valid_mask] = np.nan  # Prevent divide by zero
+
+    strain_vs_chi = (q0_arr.reshape(-1, 1) - q_data) / q0_arr.reshape(-1, 1)
     strain_vs_chi_path = os.path.join(output_dir, "strain_vs_chi_peaks.txt")
     np.savetxt(strain_vs_chi_path, strain_vs_chi, fmt="%.6e", delimiter="\t",
                header="Rows = diffraction rings; Columns = azimuthal bins (strain vs chi data)")

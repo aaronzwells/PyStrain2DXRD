@@ -33,13 +33,13 @@ def setup_logger(log_path, logger_name=None):
 def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tensor_path=None):
     start_time = time.time()
     poni_file     = "calibration/Calibration_LaB6_100x100_3s_r8_mod2.poni"
-    tif_file      = tif_override or "InputFiles/800C_inputs/VB-APS-SSAO-6_800C_Map-AO_000993.avg.tiff"
+    tif_file      = tif_override or "InputFiles/AOInputs/VB-APS-SSAO-6_25C_Map-AO_000176.avg.tiff"
     mask_thresh   = 4e2 # threshold value for the image mask
     num_azim_bins = 120 # number of azimuthal bins around the data
     q_min_nm1     = 14.0 # q_0 for binning of the data
     npt_rad       = 5000 # number of radial bins
     delta_tol     = 0.1 # default q-search width tolerance in nm^-1
-    initial_q_guesses = [17.86, 24.36, 26.12, 29.80, 35.73, 38.81, 44.26, 45.26] # initial guesses for peak fitting [nm^-1] for Alumina
+    initial_q_guesses = [17.96, 24.50, 26.27, 29.98, 35.93, 39.03, 44.51, 45.51] # initial guesses for peak fitting [nm^-1] for Alumina
     # initial_q_guesses = [17.96, 24.60, 26.36, 30.06, 36.05, 39.2, 44.50, 45.45] # initial guesses for peak fitting [nm^-1] for Ref Alumina
     # initial_q_guesses = [15.1, 20.0, 21.3, 23.2, 26.1, 30.2, 32.8, 33.8] # initial guesses for peak fitting [nm^-1] for calibrant
     tol_array   = np.array([ # tolerance values for q when searching for a peak to fit [nm^-1] for Alumina
@@ -110,7 +110,7 @@ def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tenso
         plot=False,
         logger=file_logger)
     
-    strain_tensor_components, strain_list, q0_list, strain_vs_chi_file = fl.fit_lattice_cone_distortion(
+    strain_tensor_components, strain_list, q0_list, strain_vs_chi_file = fl.fit_lattice_cone_distortion_w_shear(
         file_path=q_chi_path,
         output_dir=output_path,
         dpi=600,
