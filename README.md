@@ -36,7 +36,7 @@ It is also **HIGHLY** recommended to run this workflow within its own Python vir
 
 # WORKFLOW OVERVIEW
 
-Before executing the workflow, 'ValidationScript.py' can be used to run the peak fitting math.   This is useful for ensuring the peaks are being correctly fit to given input data. 
+Before executing the workflow, 'ValidationScript.py' can be used to run the peak fitting math.   This is useful for ensuring the peaks are being correctly fit to given input data.  *FunctionLibrary.py* contains all the functions used and called in the below scripts. 
 
 [!NOTE]
 The main workflow scripts are numbered and may be referred to as "*Script 1*", "*Script 2*", etc.
