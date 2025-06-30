@@ -32,7 +32,7 @@ It is also **HIGHLY** recommended to run this workflow within its own Python vir
 
 **__pycache__/** is a folder that houses all cached data from the batch processing steps. There  is no need for the user to ever interact with this directory as it is auto-generated.
 
-**OutputFiles*/** directories are generated automatically during script generation. These named  with the following format:  "OutputFiles\_\\<kind_of_output\>\_\\<input_file_name\>\_\\<date_and_time\>"
+**OutputFiles*/** directories are generated automatically during script generation. These named  with the following format:  "OutputFiles\_\<kind_of_output\>\_\<input_file_name\>\_\<date_and_time\>"
 
 # WORKFLOW OVERVIEW
 
