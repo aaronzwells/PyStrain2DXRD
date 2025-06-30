@@ -1,4 +1,4 @@
-These are the instructions on the workflow used in with this git repository. Please read all  the way to the bottom before using the scripts the first time. 
+These are the instructions for the workflow provided in this git repository. Please read all  the way to the bottom before using the scripts the first time. 
 
 [!IMPORTANT]
 This workflow does require an installation of PyFAI with the additional libraries added to the  original requirements.txt file for PyFAI. This revised requirements.txt file can be found at  '*/Analysis_pyFAI/pyFAI/requirements.txt'. 
