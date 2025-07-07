@@ -5,8 +5,11 @@ import pyFAI
 import fabio
 import os
 
+#BTS: The sole purpose of this script, once you were confident in your peak fitting strategy, is to give the user inputs for initial_q_guesses in 2 and 3, right?
+#Using whole pattern, with no azimuthal binning?
+
 poni_file = "calibration/Calibration_LaB6_100x100_3s_r8_mod2.poni" # calibration PONI file
-tif_file = "InputFiles/AOInputs/VB-APS-SSAO-6_25C_Map-AO_000176.avg.tiff" # representative data TIF file
+tif_file = "InputFiles/VB-APS-SSAO-6_25C_TestMap-AO_000501.avg.tiff" # representative data TIF file. 
 
 def main(
         poni_file=poni_file, 
@@ -28,19 +31,19 @@ def main(
     # Load image data from .tif
     image = fabio.open(tif_file).data
 
-    # Perform azimuthal integration to get 1D pattern (q vs I)
-    npt = 2000
+    # Perform azimuthal integration to get 1D pattern (q vs I)  #BTS: You are not using azimuthal bins yet, right?
+    npt = 2000 #BTS: Is this the number of radial bins? Andrew would call this oversampling (i.e. no more than one bin per pixel, so on the order of 1024 bins)
     result = ai.integrate1d(image, npt, unit="q_nm^-1")
     q = result.radial
     I = result.intensity
 
     # Save temporary file to use with validate_curve_fitting()
-    temp_int_file = "temp_intensity.int"
+    temp_int_file = "temp_intensity.int" #BTS: This is with the experimental data? Comment in fl lines 32-33 indicated simulated pattern, was confusing. 
     np.savetxt(temp_int_file, np.column_stack((q, I, np.zeros_like(q))), fmt="%.6f")
 
     # Call validate_curve_fitting to fit peaks
     peak_positions_q = fl.validate_curve_fitting(temp_int_file, height_frac=height_frac, distance=distance)
-    os.remove(temp_int_file)
+    os.remove(temp_int_file) #BTS: You are essentially treating the equivalent of fit2d chiplot as temporary only? Probably a good approach to avoid clutter. 
 
     # Save peaks to file
     output_txt = os.path.join(output_path,"peak_positions.txt")

@@ -7,7 +7,7 @@ from joblib import Parallel, delayed
 import glob
 import json
 
-# Batch processing for all .tif files in InputFiles/AOInputs
+# Batch processing for all .tif files in InputFiles/AOInputs.  #BTS: Essentially nothing different from 2. here other than code to organize and loop, right?
 def batch_main_pipeline(input_dir="InputFiles/25C_AO_inputs", n_jobs=-1):
     sampleName = "VB-APS-SSAO-6_25C"
     start_time = time.time()

@@ -52,7 +52,7 @@ def validate_curve_fitting(int_file_path, height_frac=0.1, distance=20, eta0=0.5
     if len(peaks) == 0:
         raise ValueError("No peaks found in .int file.")
 
-    dq = x[1] - x[0]
+    dq = x[1] - x[0] #BRS Is linear spacing always guaranteed? 
     widths_bins = peak_widths(y, peaks, rel_height=0.5)[0]
     widths_x = widths_bins * dq
 
@@ -64,7 +64,7 @@ def validate_curve_fitting(int_file_path, height_frac=0.1, distance=20, eta0=0.5
         try:
             p0 = [y[idx], x0, wid, eta0]
             bounds = ([0, x0 - delta_tol, 0, 0], [np.inf, x0 + delta_tol, np.inf, 1])
-            popt, _ = curve_fit(pseudo_voigt, x[sl], y[sl], p0=p0, bounds=bounds)
+            popt, _ = curve_fit(pseudo_voigt, x[sl], y[sl], p0=p0, bounds=bounds) #BTS: This is the line where the curve fitting takes place?
             peak_positions.append(popt[1])
         except Exception:
             logger.exception(f"Fit failed at index {idx} with x0={x0:.2f}")
@@ -113,7 +113,7 @@ def imagej_autocontrast(image, k=2.5):
 
 # --- Pseudo-Voigt profile -----------------------------------------------
 @njit(cache=True)
-def pseudo_voigt(x, amp, cen, wid, eta):
+def pseudo_voigt(x, amp, cen, wid, eta):   #BTS: To double check on pseudo-Voigt function, I'm confident it's fine though
     """ 
     standard definition of the Pseudo-Voigt function profile
     V(x,f) = η * L(x,f) + (1-η) * G(x,f), where 0 < η < 1
@@ -140,7 +140,7 @@ def load_integrator_and_data(poni_path, tif_path, output_path, ref_tif_path=None
     data = img.data.astype(np.float32)
 
     # Contrast adjustment using ImageJ-style autocontrast (wider dynamic range)
-    data_adj_float = imagej_autocontrast(data, k=3.0)
+    data_adj_float = imagej_autocontrast(data, k=3.0)  #BTS: This is strictly a rescaling & should have no effect on the arbitrary intensities? What is the purpose? Generate 2D graphic?
 
     # Keep float32 for PyFAI
     data_adj = data_adj_float
@@ -153,10 +153,10 @@ def load_integrator_and_data(poni_path, tif_path, output_path, ref_tif_path=None
     imageio.imwrite(adjusted_path, data_adj)
     logger.info(f"Adjusted image saved to: {adjusted_path}")
 
-    # No mask computation; return None for mask
-    return ai, data_adj, None
+    # No mask computation; return None for mask.  #BTS: So you are skipping the mask? Again I would talk to Andrew before applying a blanket threshold mask. 
+    return ai, data_adj, None  #BTS: Not using data_adj in any subsequent calculations, correct?
 
-def integrate_2d(ai, data, mask, num_azim_bins=360, q_min=16.0, npt_rad=5000, output_dir=None, logger=None):
+def integrate_2d(ai, data, mask, num_azim_bins=360, q_min=16.0, npt_rad=5000, output_dir=None, logger=None):  #BTS: I wonder if reducing the number of radial bins would help or hurt your case. 
     """
     Use pyFAI to integrate the 2D pattern into azimuthal bins using pyFAI's integrate2d.
     Saves each azimuthal bin's q and intensity values as a .chi file (Fit2D style).
@@ -285,7 +285,7 @@ def fit_peaks_with_initial_guesses(I2d, q, q_peaks, delta_tol=0.07, eta0=0.5, n_
     if output_dir is not None:
         output_path = f"{output_dir}/q_vs_chi_peaks.txt"
         np.savetxt(output_path, arr, fmt="%.6f", delimiter="\t",
-                header="Rows = diffraction rings; Columns = azimuthal bins (q vs chi data)")
+                header="Rows = diffraction rings; Columns = azimuthal bins (q vs chi data)")  #BTS: I would consider transposing this to make the data more readable
         logger.info(f"q vs chi centroid data saved to: {output_path}")
     else:
         logger.warning("No output directory provided!\nq vs χ data was not saved to a .txt!")
@@ -366,7 +366,7 @@ def plot_strain_vs_chi_stacked(file_path, output_dir=None, chi_deg=None, dpi=600
         logger.info(f"Stacked strain vs chi plot saved to: {fig_filename}")
 
 # --- Compute full strain tensor (biaxial - components xx, yy, & xy) ----------------------------------------
-def fit_lattice_cone_distortion(file_path, output_dir=None, chi_deg=None, dpi=600, plot=True, logger=None):
+def fit_lattice_cone_distortion(file_path, output_dir=None, chi_deg=None, dpi=600, plot=True, logger=None):   #BTS: This is the main function to check. 
     """
     Fits lattice cone distortion model to q(chi) data to extract in-plane strain tensor components.
 
@@ -476,7 +476,7 @@ def fit_lattice_cone_distortion(file_path, output_dir=None, chi_deg=None, dpi=60
     strain_vs_chi = (np.array(q0_list).reshape(-1, 1) - q_data) / np.array(q0_list).reshape(-1, 1)
     strain_vs_chi_path = os.path.join(output_dir, "strain_vs_chi_peaks.txt")
     np.savetxt(strain_vs_chi_path, strain_vs_chi, fmt="%.6e", delimiter="\t",
-               header="Rows = diffraction rings; Columns = azimuthal bins (strain vs chi data)")
+               header="Rows = diffraction rings; Columns = azimuthal bins (strain vs chi data)") #BTS: I would consider transposing this to make the data more readable
     logger.info(f"Strain vs chi centroid data saved to: {strain_vs_chi_path}")
 
     return strain_array, strain_list, q0_list, strain_vs_chi_path
@@ -502,12 +502,18 @@ def fit_lattice_cone_distortion_w_shear(file_path, output_dir=None, chi_deg=None
     n_rings, n_bins = q_data.shape
 
     if chi_deg is None:
-        chi_deg = np.linspace(0, 360, n_bins, endpoint=False)
+        chi_deg = np.linspace(0, 360, n_bins, endpoint=False) #BTS: Are you sure these angles represent the center of your bins?
 
     def distortion_model(chi_deg, q0, eps_xx, eps_yy, eps_xy, eps_xz, eps_yz):
         chi_rad = np.deg2rad(chi_deg)
-        eps = eps_xx * np.cos(chi_rad)**2 + eps_yy * np.sin(chi_rad)**2 + eps_xy * np.sin(2 * chi_rad) + eps_xz * np.cos(chi_rad) + eps_yz * np.sin(chi_rad)
-        return q0 * (1 - eps)
+        eps = eps_xx * np.cos(chi_rad)**2 + eps_yy * np.sin(chi_rad)**2 + eps_xy * np.sin(2 * chi_rad) + eps_xz * np.cos(chi_rad) + eps_yz * np.sin(chi_rad) #BTS: This is equation 9.30, correct? 
+        """ BTS:
+        I think you are conflating azimuthal angle (gamma or chi) with the Euler angle (phi) in Eq. 9.30. 9.30 is not actually for a 2D pattern.
+        Did you read secion 9.3 (pp. 272-274)?
+        I think what you actually want to be using is eq. 9.66-9.68, which is the 2D expansion with gamma/chi dependency
+        What I am not sure about is how to set the Euler angles. There is table 9.2 (p. 278), but I need to figure out if it is relevant. 
+        """
+        return q0 * (1 - eps)  #BTS: Let's discuss this line. I need some clarification. 
 
     strain_params = []
     axes = None
@@ -518,10 +524,10 @@ def fit_lattice_cone_distortion_w_shear(file_path, output_dir=None, chi_deg=None
 
     for i in range(n_rings):
         q_vals = q_data[i]
-        mask = ~np.isnan(q_vals)
+        mask = ~np.isnan(q_vals)  #BTS: Excludes failed fits/no peak
         x, y = chi_deg[mask], q_vals[mask]
 
-        if len(x) < 20:
+        if len(x) < 20: #BTS: Rationale behind this threshold? How did you decide on 20? Per p. 274, the actual minimum should be the deg. of freedom. 
             logger.warning(f"Ring {i+1}: insufficient data points ({len(x)} < 20). Skipping fit.")
             if plot:
                 ax = axes[i] if n_rings > 1 else axes[0]
@@ -530,11 +536,12 @@ def fit_lattice_cone_distortion_w_shear(file_path, output_dir=None, chi_deg=None
             strain_params.append([np.nan]*3)
             continue
 
-        p0 = [np.mean(y), 0, 0, 0, 0, 0]
+        p0 = [np.mean(y), 0, 0, 0, 0, 0]  #BTS: 6 parameters here. 7 arguments for distortion_model. Is chi_deg ignored somewhere?
+        #BTS: So your initial guess for all components of strain tensor is 0. Is q0 treated as a parameter though? I might answer my own question once I read the textbook in full. 
         try:
-            popt, _ = curve_fit(distortion_model, x, y, p0=p0)
-            q0, eps_xx, eps_yy, eps_xy, eps_xz, eps_yz = popt
-            y_fit = distortion_model(x, *popt)
+            popt, _ = curve_fit(distortion_model, x, y, p0=p0) 
+            q0, eps_xx, eps_yy, eps_xy, eps_xz, eps_yz = popt #Is this where chi_deg is excluded?
+            y_fit = distortion_model(x, *popt) #BTS: Produces the orange line in the plot
             # Compute residuals standard deviation
             residuals_std = np.std(y - y_fit)
             strain_params.append([q0, eps_xx, eps_yy, eps_xy, eps_xz, eps_yz])
