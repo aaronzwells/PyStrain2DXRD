@@ -32,7 +32,7 @@ These are the instructions for the workflow provided in this git repository. Ple
 
 **__pycache__/** is a folder that houses all cached data from the batch processing steps. There  is no need for the user to ever interact with this directory as it is auto-generated.
 
-__OutputFiles*/__ directories are generated automatically during script generation. These named  with the following format:  "OutputFiles\_\<kind_of_output\>\_\<input_file_name\>\_\<date_and_time\>"
+__OutputFiles*/__ directories are generated automatically during script generation. These are named  with the following format:  "OutputFiles\_\<kind_of_output\>\_\<input_file_name\>\_\<date_and_time\>"
 
 # WORKFLOW OVERVIEW
 
