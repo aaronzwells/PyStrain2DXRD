@@ -59,8 +59,8 @@ Before executing the workflow, ValidationScript.py can be used to run the peak f
 
 ## REQUIRED USER-DEFINED VARIABLES
 
-[!NOTE]
-See the comments in the code for a definition of each variable
+>[!NOTE]
+>See the comments in the code for a definition of each variable
 
 ### Script 1
 Lines 8-9
