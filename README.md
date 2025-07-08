@@ -32,7 +32,7 @@ These are the instructions for the workflow provided in this git repository. Ple
 
 **__pycache__/** is a folder that houses all cached data from the batch processing steps. There  is no need for the user to ever interact with this directory as it is auto-generated.
 
-**OutputFiles*/** directories are generated automatically during script generation. These named  with the following format:  "OutputFiles\_\<kind_of_output\>\_\<input_file_name\>\_\<date_and_time\>"
+__OutputFiles*/__ directories are generated automatically during script generation. These named  with the following format:  "OutputFiles\_\<kind_of_output\>\_\<input_file_name\>\_\<date_and_time\>"
 
 # WORKFLOW OVERVIEW
 
@@ -59,8 +59,8 @@ Before executing the workflow, ValidationScript.py can be used to run the peak f
 
 ## REQUIRED USER-DEFINED VARIABLES
 
-[!NOTE]
-See the comments in the code for a definition of each variable
+>[!NOTE]
+>See the comments in the code for a definition of each variable
 
 ### Script 1
 Lines 8-9

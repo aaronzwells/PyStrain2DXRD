@@ -37,7 +37,7 @@ def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tenso
     mask_thresh   = 4e2 # threshold value for the image mask
     num_azim_bins = 120 # number of azimuthal bins around the data
     q_min_nm1     = 14.0 # q_0 for binning of the data
-    npt_rad       = 5000 # number of radial bins
+    npt_rad       = 3000 # number of radial bins (~2-3x the radial pixel count)
     delta_tol     = 0.1 # default q-search width tolerance in nm^-1
     initial_q_guesses = [17.96, 24.50, 26.27, 29.98, 35.93, 39.03, 44.51, 45.51] # initial guesses for peak fitting [nm^-1] for Alumina
     # initial_q_guesses = [17.96, 24.60, 26.36, 30.06, 36.05, 39.2, 44.50, 45.45] # initial guesses for peak fitting [nm^-1] for Ref Alumina
