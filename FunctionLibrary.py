@@ -512,6 +512,10 @@ def fit_lattice_cone_distortion_w_shear(file_path, output_dir=None, chi_deg=None
         Did you read secion 9.3 (pp. 272-274)?
         I think what you actually want to be using is eq. 9.66-9.68, which is the 2D expansion with gamma/chi dependency
         What I am not sure about is how to set the Euler angles. There is table 9.2 (p. 278), but I need to figure out if it is relevant. 
+        
+        Table 9.2 deals with identifying the special case of a typical 1D geometry in a 2D dataset. I don't think it is helpful for our
+        case with gamma/chi as the main indepdendent variable.
+        Section 9.4.2 discusses the different types of scans (which Euler angle is being manipulated??), but they are all in reflection mode; we are in transmission mode.
         """
         return q0 * (1 - eps)  #BTS: Let's discuss this line. I need some clarification. 
 
