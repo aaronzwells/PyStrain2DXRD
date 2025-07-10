@@ -6,12 +6,12 @@ import fabio
 import os
 
 poni_file = "calibration/Calibration_LaB6_100x100_3s_r8_mod2.poni" # calibration PONI file
-tif_file = "InputFiles/AOInputs/VB-APS-SSAO-6_25C_Map-AO_000176.avg.tiff" # representative data TIF file
+tif_file = "calibration/ceria_lab6_exsitu_71p676keV_1145mm_100x100_3s_002265.avg.tif" # representative data TIF file
 
 def main(
         poni_file=poni_file, 
         tif_file=tif_file, 
-        height_frac=0.1, 
+        height_frac=0.05, 
         distance=20):
     
     # This removes the file extension and .avg from the end of the averaged image files

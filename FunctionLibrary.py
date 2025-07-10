@@ -293,7 +293,7 @@ def fit_peaks_with_initial_guesses(I2d, q, q_peaks, delta_tol=0.07, eta0=0.5, n_
     return arr, output_path
 
 
-def plot_q_vs_chi_stacked(file_path, output_dir=None, chi_deg=None, dpi=600, plot=True, logger=None):
+def plot_q_vs_chi_stacked(file_path, output_dir=None, chi_deg=None, dpi=600, plot=True, calibrant=False, logger=None):
     """
     Plots each row of q_vs_chi_peaks.txt as a stacked subplot, with chi on the x-axis and q on the y-axis.
 
@@ -323,6 +323,7 @@ def plot_q_vs_chi_stacked(file_path, output_dir=None, chi_deg=None, dpi=600, plo
             ax.set_title(f'Ring {i+1}')
             ax.set_ylabel(f'q (nm⁻¹)')
             ax.set_xlim(0, 360)
+            
         axes[-1].set_xlabel('Azimuth χ (°)')
         fig.tight_layout()
         fig_filename = os.path.join(output_dir, "q_vs_chi_plot.png")
@@ -331,7 +332,7 @@ def plot_q_vs_chi_stacked(file_path, output_dir=None, chi_deg=None, dpi=600, plo
         logger.info(f"Stacked q vs chi plot saved to: {fig_filename}")
 
 # --- Plot strain vs chi stacked (modeled after plot_q_vs_chi_stacked) ---
-def plot_strain_vs_chi_stacked(file_path, output_dir=None, chi_deg=None, dpi=600, plot=True, logger=None):
+def plot_strain_vs_chi_stacked(file_path, output_dir=None, chi_deg=None, dpi=600, plot=True, calibrant=False, logger=None):
     """
     Plots each row of strain_vs_chi_peaks.txt as a stacked subplot, with chi on the x-axis and strain on the y-axis.
 
@@ -358,6 +359,9 @@ def plot_strain_vs_chi_stacked(file_path, output_dir=None, chi_deg=None, dpi=600
             ax.set_title(f'Ring {i+1}')
             ax.set_ylabel('Strain')
             ax.set_xlim(0, 360)
+            if calibrant:
+                ax.set_ylim(-0.0015,0.0015)
+            
         axes[-1].set_xlabel('Azimuth χ (°)')
         fig.tight_layout()
         fig_filename = os.path.join(output_dir, "strain_vs_chi_plot.png")
@@ -366,17 +370,25 @@ def plot_strain_vs_chi_stacked(file_path, output_dir=None, chi_deg=None, dpi=600
         logger.info(f"Stacked strain vs chi plot saved to: {fig_filename}")
 
 # --- Compute full strain tensor (biaxial - components xx, yy, & xy) ----------------------------------------
-def fit_lattice_cone_distortion(file_path, output_dir=None, chi_deg=None, dpi=600, plot=True, logger=None):
+def fit_lattice_cone_distortion(file_path, output_dir=None, calibrant=False, q0_vals=None, chi_deg=None, dpi=600, plot=True, logger=None):
     """
     Fits lattice cone distortion model to q(chi) data to extract in-plane strain tensor components.
 
     Parameters:
         file_path (str): Path to q_vs_chi_peaks.txt
         output_dir (str): Where to save the combined plot and results
+        calibrant (bool): True if using calibrant with predefined q0 values
+        q0_vals (list or array): Known q0 values (required if calibrant=True)
         chi_deg (array-like, optional): Azimuthal angles in degrees. If None, assumes uniform [0, 360).
+        dpi (int): Resolution for output plots
+        plot (bool): Whether to generate and save plots
+        logger (logging.Logger): Logger instance for logging information/warnings/errors
 
     Returns:
-        strain_params (ndarray): Array of [eps_xx, eps_yy, eps_xy] per ring
+        strain_array (ndarray): Array of strain tensor components [eps_xx, eps_yy, eps_xy] per ring
+        strain_list (list): Average strain per ring
+        q0_list (list): q0 values per ring (optimized or predefined)
+        strain_vs_chi_path (str): File path of saved strain vs chi data
     """
     logger = logger or logging.getLogger(__name__)
     import os
@@ -400,47 +412,100 @@ def fit_lattice_cone_distortion(file_path, output_dir=None, chi_deg=None, dpi=60
         if n_rings == 1:
             axes = [axes]
 
+    # y limits for the strain vs chi plots
+    y_min = -0.0015
+    y_max = 0.0015
+
     for i in range(n_rings):
         q_vals = q_data[i]
         mask = ~np.isnan(q_vals)
         x, y = chi_deg[mask], q_vals[mask]
 
-        if len(x) < 20:
-            logger.warning(f"Ring {i+1}: insufficient data points ({len(x)} < 20). Skipping fit.")
-            if plot:
-                ax = axes[i] if n_rings > 1 else axes[0]
-                ax.set_title(f"Ring {i+1}: insufficient data")
-                ax.axis('off')
-            strain_params.append([np.nan]*3)
-            continue
+        if calibrant: # fitting if using the calibrant with defined q0 values
+            if len(x) < 20:
+                logger.warning(f"Ring {i+1}: insufficient data points ({len(x)} < 20). Skipping fit.")
+                if plot:
+                    ax = axes[i] if n_rings > 1 else axes[0]
+                    ax.set_title(f"Ring {i+1}: insufficient data")
+                    ax.axis('off')
+                strain_params.append([np.nan]*4)
+                continue
 
-        p0 = [np.mean(y), 0, 0, 0]
-        try:
-            popt, _ = curve_fit(distortion_model, x, y, p0=p0)
-            q0, eps_xx, eps_yy, eps_xy = popt
-            y_fit = distortion_model(x, *popt)
-            # Compute residuals standard deviation
-            residuals_std = np.std(y - y_fit)
-            strain_params.append([q0, eps_xx, eps_yy, eps_xy])
-            if plot:
-                ax = axes[i] if n_rings > 1 else axes[0]
-                ax.plot(x, y, '.', markersize=3, label='Centroid Data')
-                ax.plot(
-                    x, y_fit, '-',
-                    label=f'ε_xx={eps_xx:.3e}, \nε_yy={eps_yy:.3e}, \nε_xy={eps_xy:.3e} \nStd(res)={residuals_std:.2e}'
-                )
-                # ax.set_xlabel('Azimuth χ (°)')
-                ax.set_ylabel('q (nm⁻¹)')
-                ax.set_title(f'Ring {i+1}')
-                ax.legend(fontsize='small')
-                ax.legend(loc='lower left', bbox_to_anchor=(1.02,0.02), ncol=1)
-        except Exception:
-            if plot:
-                ax = axes[i] if n_rings > 1 else axes[0]
-                ax.set_title(f"Ring {i+1}: fit failed")
-                ax.axis('off')
-            strain_params.append([np.nan, np.nan, np.nan, np.nan])
-            logger.exception(f"Fit failed for Ring {i+1}")
+            q0_fixed = q0_vals[i]
+            p0 = [0, 0, 0] # initial guesses for optimization parameters: ε_xx, ε_yy, ε_xy
+            try:
+                def distortion_model_fixed_q0(chi_deg, eps_xx, eps_yy, eps_xy):
+                    chi_rad = np.deg2rad(chi_deg)
+                    eps = eps_xx * np.cos(chi_rad)**2 + eps_yy * np.sin(chi_rad)**2 + eps_xy * np.sin(2 * chi_rad)
+                    return q0_fixed * (1 - eps)
+                # fitting the curve
+                popt, _ = curve_fit(distortion_model_fixed_q0, x, y, p0=p0)
+                # unpacking the optimized parameters
+                eps_xx, eps_yy, eps_xy = popt
+                # calculate fitted parameters
+                y_fit = distortion_model_fixed_q0(x, *popt)
+                # Compute residuals standard deviation
+                residuals_std = np.std(y - y_fit)
+                strain_params.append([q0_fixed, eps_xx, eps_yy, eps_xy])
+                if plot:
+                    ax = axes[i] if n_rings > 1 else axes[0]
+                    ax.plot(x, y, '.', markersize=3, label='Centroid Data')
+                    ax.plot(
+                        x, y_fit, '-',
+                        label=f'ε_xx={eps_xx:.3e}, \nε_yy={eps_yy:.3e}, \nε_xy={eps_xy:.3e} \nStd(res)={residuals_std:.2e}'
+                    )
+                    # ax.set_ylim(y_min, y_max)
+                    # ax.set_xlabel('Azimuth χ (°)')
+                    ax.set_ylabel('q (nm⁻¹)')
+                    ax.set_title(f'Ring {i+1}')
+                    ax.legend(fontsize='small')
+                    ax.legend(loc='lower left', bbox_to_anchor=(1.02,0.02), ncol=1)
+            except Exception:
+                if plot:
+                    ax = axes[i] if n_rings > 1 else axes[0]
+                    ax.set_title(f"Ring {i+1}: fit failed")
+                    ax.axis('off')
+                strain_params.append([np.nan, np.nan, np.nan, np.nan])
+                logger.exception(f"Fit failed for Ring {i+1}")
+        
+        else: # fitting for true dataset, where q0 is unknown
+            if len(x) < 20:
+                logger.warning(f"Ring {i+1}: insufficient data points ({len(x)} < 20). Skipping fit.")
+                if plot:
+                    ax = axes[i] if n_rings > 1 else axes[0]
+                    ax.set_title(f"Ring {i+1}: insufficient data")
+                    ax.axis('off')
+                strain_params.append([np.nan]*3)
+                continue
+
+            p0 = [np.mean(y), 0, 0, 0]
+            try:
+                popt, _ = curve_fit(distortion_model, x, y, p0=p0)
+                q0, eps_xx, eps_yy, eps_xy = popt
+                y_fit = distortion_model(x, *popt)
+                # Compute residuals standard deviation
+                residuals_std = np.std(y - y_fit)
+                strain_params.append([q0, eps_xx, eps_yy, eps_xy])
+                if plot:
+                    ax = axes[i] if n_rings > 1 else axes[0]
+                    ax.plot(x, y, '.', markersize=3, label='Centroid Data')
+                    ax.plot(
+                        x, y_fit, '-',
+                        label=f'ε_xx={eps_xx:.3e}, \nε_yy={eps_yy:.3e}, \nε_xy={eps_xy:.3e} \nStd(res)={residuals_std:.2e}'
+                    )
+                    # ax.set_ylim(y_min, y_max)
+                    # ax.set_xlabel('Azimuth χ (°)')
+                    ax.set_ylabel('q (nm⁻¹)')
+                    ax.set_title(f'Ring {i+1}')
+                    ax.legend(fontsize='small')
+                    ax.legend(loc='lower left', bbox_to_anchor=(1.02,0.02), ncol=1)
+            except Exception:
+                if plot:
+                    ax = axes[i] if n_rings > 1 else axes[0]
+                    ax.set_title(f"Ring {i+1}: fit failed")
+                    ax.axis('off')
+                strain_params.append([np.nan, np.nan, np.nan, np.nan])
+                logger.exception(f"Fit failed for Ring {i+1}")
 
     if plot:
         axes[-1].set_xlabel('Azimuth χ (°)')
@@ -482,17 +547,26 @@ def fit_lattice_cone_distortion(file_path, output_dir=None, chi_deg=None, dpi=60
     return strain_array, strain_list, q0_list, strain_vs_chi_path
 
 # --- Compute full strain tensor (biaxial - components xx, yy, & xy) ----------------------------------------
-def fit_lattice_cone_distortion_w_shear(file_path, output_dir=None, chi_deg=None, dpi=600, plot=True, logger=None):
+def fit_lattice_cone_distortion_w_shear(file_path, output_dir=None, calibrant=False, q0_vals=None, chi_deg=None, dpi=600, plot=True, logger=None):
     """
     Fits lattice cone distortion model to q(chi) data to extract in-plane strain tensor components.
 
     Parameters:
         file_path (str): Path to q_vs_chi_peaks.txt
         output_dir (str): Where to save the combined plot and results
+        calibrant (bool): True if using calibrant with predefined q0 values
+        q0_vals (list or array): Known q0 values (required if calibrant=True)
         chi_deg (array-like, optional): Azimuthal angles in degrees. If None, assumes uniform [0, 360).
+        dpi (int): Resolution for output plots
+        plot (bool): Whether to generate and save plots
+        logger (logging.Logger): Logger instance for logging information/warnings/errors
 
     Returns:
-        strain_params (ndarray): Array of [eps_xx, eps_yy, eps_xy] per ring
+        strain_array (ndarray): Array of strain tensor components 
+                                [eps_xx, eps_yy, eps_xy, eps_xz, eps_yz] per ring
+        strain_list (list): Average strain per ring
+        q0_list (list): q0 values per ring (optimized or predefined)
+        strain_vs_chi_path (str): File path of saved strain vs chi data
     """
     logger = logger or logging.getLogger(__name__)
     import os
@@ -521,43 +595,97 @@ def fit_lattice_cone_distortion_w_shear(file_path, output_dir=None, chi_deg=None
         mask = ~np.isnan(q_vals)
         x, y = chi_deg[mask], q_vals[mask]
 
-        if len(x) < 20:
-            logger.warning(f"Ring {i+1}: insufficient data points ({len(x)} < 20). Skipping fit.")
-            if plot:
-                ax = axes[i] if n_rings > 1 else axes[0]
-                ax.set_title(f"Ring {i+1}: insufficient data")
-                ax.axis('off')
-            strain_params.append([np.nan]*3)
-            continue
+        if calibrant:
+            if len(x) < 20:
+                logger.warning(f"Ring {i+1}: insufficient data points ({len(x)} < 20). Skipping fit.")
+                if plot:
+                    ax = axes[i] if n_rings > 1 else axes[0]
+                    ax.set_title(f"Ring {i+1}: insufficient data")
+                    ax.axis('off')
+                strain_params.append([np.nan]*6)
+                continue
 
-        p0 = [np.mean(y), 0, 0, 0, 0, 0]
-        try:
-            popt, _ = curve_fit(distortion_model, x, y, p0=p0)
-            q0, eps_xx, eps_yy, eps_xy, eps_xz, eps_yz = popt
-            y_fit = distortion_model(x, *popt)
-            # Compute residuals standard deviation
-            residuals_std = np.std(y - y_fit)
-            strain_params.append([q0, eps_xx, eps_yy, eps_xy, eps_xz, eps_yz])
-            if plot:
-                ax = axes[i] if n_rings > 1 else axes[0]
-                ax.plot(x, y, '.', markersize=3, label='Centroid Data')
-                ax.plot(
-                    x, y_fit, '-',
-                    label=f'ε_xx={eps_xx:.3e}, \nε_yy={eps_yy:.3e}, \nε_xy={eps_xy:.3e} \nStd(res)={residuals_std:.2e}'
-                )
-                # ax.set_xlabel('Azimuth χ (°)')
-                ax.set_ylabel('q (nm⁻¹)')
-                ax.set_title(f'Ring {i+1}')
-                ax.legend(fontsize='small')
-                ax.legend(loc='lower left', bbox_to_anchor=(1.02,0.02), ncol=1)
-        except Exception:
-            if plot:
-                ax = axes[i] if n_rings > 1 else axes[0]
-                ax.set_title(f"Ring {i+1}: fit failed")
-                ax.axis('off')
-            strain_params.append([np.nan, np.nan, np.nan, np.nan, np.nan, np.nan])
-            logger.exception(f"Fit failed for Ring {i+1}")
-            raise
+            q0_fixed = q0_vals[i]
+            p0 = [0, 0, 0, 0, 0]
+
+            try:
+                def distortion_model_fixed_q0(chi_deg, eps_xx, eps_yy, eps_xy, eps_xz, eps_yz):
+                    chi_rad = np.deg2rad(chi_deg)
+                    eps = (eps_xx * np.cos(chi_rad)**2 +
+                        eps_yy * np.sin(chi_rad)**2 +
+                        eps_xy * np.sin(2 * chi_rad) +
+                        eps_xz * np.cos(chi_rad) +
+                        eps_yz * np.sin(chi_rad))
+                    return q0_fixed * (1 - eps)
+
+                popt, _ = curve_fit(distortion_model_fixed_q0, x, y, p0=p0)
+                eps_xx, eps_yy, eps_xy, eps_xz, eps_yz = popt
+                y_fit = distortion_model_fixed_q0(x, *popt)
+                residuals_std = np.std(y - y_fit)
+                strain_params.append([q0_fixed, eps_xx, eps_yy, eps_xy, eps_xz, eps_yz])
+
+                if plot:
+                    ax = axes[i] if n_rings > 1 else axes[0]
+                    ax.plot(x, y, '.', markersize=3, label='Centroid Data')
+                    label = (f'ε_xx={eps_xx:.3e}\n'
+                            f'ε_yy={eps_yy:.3e}\n'
+                            f'ε_xy={eps_xy:.3e}\n'
+                            f'ε_xz={eps_xz:.3e}\n'
+                            f'ε_yz={eps_yz:.3e}\n'
+                            f'Std(res)={residuals_std:.2e}')
+                    ax.plot(x, y_fit, '-', label=label)
+                    ax.set_ylabel('q (nm⁻¹)')
+                    ax.set_title(f'Ring {i+1}')
+                    ax.legend(fontsize='small', loc='lower left', bbox_to_anchor=(1.02,0.02))
+
+            except Exception:
+                logger.exception(f"Fit failed for Ring {i+1}")
+                if plot:
+                    ax = axes[i] if n_rings > 1 else axes[0]
+                    ax.set_title(f"Ring {i+1}: fit failed")
+                    ax.axis('off')
+                strain_params.append([np.nan]*6)
+
+        else:
+            if len(x) < 20:
+                logger.warning(f"Ring {i+1}: insufficient data points ({len(x)} < 20). Skipping fit.")
+                if plot:
+                    ax = axes[i] if n_rings > 1 else axes[0]
+                    ax.set_title(f"Ring {i+1}: insufficient data")
+                    ax.axis('off')
+                strain_params.append([np.nan]*6)
+                continue
+
+            p0 = [np.mean(y), 0, 0, 0, 0, 0]
+
+            try:
+                popt, _ = curve_fit(distortion_model, x, y, p0=p0)
+                q0, eps_xx, eps_yy, eps_xy, eps_xz, eps_yz = popt
+                y_fit = distortion_model(x, *popt)
+                residuals_std = np.std(y - y_fit)
+                strain_params.append([q0, eps_xx, eps_yy, eps_xy, eps_xz, eps_yz])
+
+                if plot:
+                    ax = axes[i] if n_rings > 1 else axes[0]
+                    ax.plot(x, y, '.', markersize=3, label='Centroid Data')
+                    label = (f'ε_xx={eps_xx:.3e}\n'
+                            f'ε_yy={eps_yy:.3e}\n'
+                            f'ε_xy={eps_xy:.3e}\n'
+                            f'ε_xz={eps_xz:.3e}\n'
+                            f'ε_yz={eps_yz:.3e}\n'
+                            f'Std(res)={residuals_std:.2e}')
+                    ax.plot(x, y_fit, '-', label=label)
+                    ax.set_ylabel('q (nm⁻¹)')
+                    ax.set_title(f'Ring {i+1}')
+                    ax.legend(fontsize='small', loc='lower left', bbox_to_anchor=(1.02,0.02))
+
+            except Exception:
+                logger.exception(f"Fit failed for Ring {i+1}")
+                if plot:
+                    ax = axes[i] if n_rings > 1 else axes[0]
+                    ax.set_title(f"Ring {i+1}: fit failed")
+                    ax.axis('off')
+                strain_params.append([np.nan]*6)
 
     if plot:
         axes[-1].set_xlabel('Azimuth χ (°)')
@@ -568,7 +696,10 @@ def fit_lattice_cone_distortion_w_shear(file_path, output_dir=None, chi_deg=None
         logger.info(f"Combined distortion fit plot saved to: {fig_path}")
 
     # Convert strain_params to numpy array and save (only the tensor components, not q0)
-    strain_array = np.array([row[1:4] if row is not None and len(row) > 3 else [np.nan, np.nan, np.nan] for row in strain_params])
+    strain_array = np.array([
+    row[1:] if row is not None and len(row) == 6 else [np.nan]*5
+    for row in strain_params
+    ])
     # out_txt = os.path.join(output_dir, "strain_tensor_components.txt")
     # np.savetxt(out_txt, strain_array, header="Columns: eps_xx eps_yy eps_xy", fmt="%.6e", delimiter="\t")
     # logger.info(f"Strain tensor components saved to: {out_txt}")
