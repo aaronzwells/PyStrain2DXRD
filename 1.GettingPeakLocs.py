@@ -6,7 +6,7 @@ import fabio
 import os
 
 poni_file = "calibration/Calibration_LaB6_100x100_3s_r8_mod2.poni" # calibration PONI file
-tif_file = "calibration/ceria_lab6_exsitu_71p676keV_1145mm_100x100_3s_002265.avg.tif" # representative data TIF file
+tif_file = "InputFiles/25C_AO_inputs/VB-APS-SSAO-6_25C_Map-AO_000436.avg.tiff" # representative data TIF file
 
 def main(
         poni_file=poni_file, 
@@ -57,7 +57,7 @@ def main(
     plt.legend()
     plt.tight_layout()
     plt.savefig(f"{output_path}/peak_detection_plot.png", dpi=600)
-    plt.show()
+    # plt.show()
 
 if __name__ == "__main__":
     main()

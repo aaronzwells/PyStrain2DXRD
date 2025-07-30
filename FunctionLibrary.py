@@ -784,12 +784,12 @@ def generate_strain_maps_from_json(json_path, n_rows, n_cols, output_dir="Strain
             masked_data,
             origin='upper',
             cmap=cmap,
-            vmin=-8.100e-04,
-            vmax= 7.900e-04,
+            # vmin=-8.100e-04,
+            # vmax= 7.900e-04,
             extent=[-x_shift, n_cols * pixel_size[0] - x_shift, 0, n_rows * pixel_size[1]]
         )
-        cb = plt.colorbar(im, ticks=np.linspace(-8.100e-04, 7.900e-04, num=8))
-        # cb = plt.colorbar(im, ticks=np.linspace(np.nanmin(masked_data), np.nanmax(masked_data), num=9))
+        # cb = plt.colorbar(im, ticks=np.linspace(-8.100e-04, 7.900e-04, num=8))
+        cb = plt.colorbar(im, ticks=np.linspace(np.nanmin(masked_data), np.nanmax(masked_data), num=9))
         cb.set_label('Strain')
         cb.formatter = FuncFormatter(lambda x, _: f"{x:.3e}")
         cb.update_ticks()
