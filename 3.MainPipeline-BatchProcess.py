@@ -37,11 +37,23 @@ def batch_main_pipeline(input_dir="InputFiles/25C_AO_inputs", n_jobs=-1):
             q_min_nm1     = 14.0
             npt_rad       = 5000
             delta_tol     = 0.1
-            initial_q_guesses = [17.96, 24.50, 26.27, 29.98, 35.93, 39.03, 44.51, 45.51]
+            wavelength_nm = 0.1729786687 # [nm] X-ray wavelength
+            solved_strain_components = 5 # 3 = biaxial; 5 = biaxial w/ shear; 6 = all components
+            initial_q_guesses = [
+                17.960905, 
+                24.502082, 
+                26.266745, 
+                29.974327, 
+                35.928976, 
+                39.032337, 
+                41.361824, 
+                44.513362] # initial guesses for peak fitting [nm^-1] for Alumina
             tol_array   = np.array([
                 [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
                 [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]])
             eta0          = 0.5
+
+
             filename_noext = fl.remove_filename_extension(tif_file)
             outputPath = os.path.join(output_directory, filename_noext)
             output_path = fl.create_directory(outputPath, logger=file_logger)
@@ -74,8 +86,15 @@ def batch_main_pipeline(input_dir="InputFiles/25C_AO_inputs", n_jobs=-1):
                 dpi=600,
                 plot=False,
                 logger=file_logger)
-            strain_tensor_components, strain_list, q0_list, strain_vs_chi_file = fl.fit_lattice_cone_distortion_w_shear(
-                file_path=q_chi_path,
+            strain_tensor_components, strain_list, q0_list, strain_vs_chi_file = fl.fit_lattice_cone_distortion(
+                q_data=q_vs_chi,
+                q0_list=initial_q_guesses,
+                wavelength_nm=wavelength_nm,
+                chi_deg=chi,
+                psi_deg=None,
+                phi_deg=None,
+                omega_deg=None,
+                num_strain_components=solved_strain_components,
                 output_dir=output_path,
                 dpi=600,
                 plot=True,
@@ -89,7 +108,15 @@ def batch_main_pipeline(input_dir="InputFiles/25C_AO_inputs", n_jobs=-1):
             # Write strain tensor components to per-image JSON file
             strain_tensor_path = os.path.join(output_path, "strain_tensor.json")
             tensor_data = [
-                {"ring": i + 1, "eps_xx": row[0], "eps_yy": row[1], "eps_xy": row[2]}
+                {
+                    "ring": i + 1,
+                    "eps_xx": row[0],
+                    "eps_xy": row[1],
+                    "eps_yy": row[2],
+                    "eps_xz": row[3],
+                    "eps_yz": row[4],
+                    "eps_zz": row[5]
+                }
                 for i, row in enumerate(strain_tensor_components.tolist())
             ]
             with open(strain_tensor_path, 'w') as f:

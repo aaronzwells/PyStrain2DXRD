@@ -6,3 +6,29 @@
 [2025-07-09 16:32:01] INFO: Combined distortion fit plot saved to: ValidationOutputFiles/ceria_lab6_exsitu_71p676keV_1145mm_100x100_3s_002265/q_vs_chi_plot_fitted.png
 [2025-07-09 16:32:01] INFO: Strain vs chi centroid data saved to: ValidationOutputFiles/ceria_lab6_exsitu_71p676keV_1145mm_100x100_3s_002265/strain_vs_chi_peaks.txt
 [2025-07-09 16:32:02] INFO: Stacked strain vs chi plot saved to: ValidationOutputFiles/ceria_lab6_exsitu_71p676keV_1145mm_100x100_3s_002265/strain_vs_chi_plot.png
+[2025-08-01 13:21:33] INFO: Adjusted image saved to: ValidationOutputFiles/ceria_lab6_exsitu_71p676keV_1145mm_100x100_3s_002265/ceria_lab6_exsitu_71p676keV_1145mm_100x100_3s_002265.avg_adjusted.tif
+[2025-08-01 13:21:33] INFO: Directory created: ValidationOutputFiles/ceria_lab6_exsitu_71p676keV_1145mm_100x100_3s_002265/ChiOutput
+[2025-08-01 13:21:33] INFO: Running the integrate_2d() function
+[2025-08-01 13:21:35] INFO: Stacked q vs chi plot saved to: ValidationOutputFiles/ceria_lab6_exsitu_71p676keV_1145mm_100x100_3s_002265/ChiOutput/q_vs_chi_plot.png
+[2025-08-01 13:21:37] INFO: q vs chi centroid data saved to: ValidationOutputFiles/ceria_lab6_exsitu_71p676keV_1145mm_100x100_3s_002265/q_vs_chi_peaks.txt
+[2025-08-01 13:21:39] INFO: Stacked q vs chi plot saved to: ValidationOutputFiles/ceria_lab6_exsitu_71p676keV_1145mm_100x100_3s_002265/q_vs_chi_plot.png
+[2025-08-01 13:21:39] INFO: The model is solving for 5 strain components.
+[2025-08-01 13:21:39] INFO: ε33 is set to zero
+[2025-08-01 13:21:39] INFO: The model is solving for 5 strain components.
+[2025-08-01 13:21:39] INFO: ε33 is set to zero
+[2025-08-01 13:21:39] INFO: The model is solving for 5 strain components.
+[2025-08-01 13:21:39] INFO: ε33 is set to zero
+[2025-08-01 13:21:39] INFO: The model is solving for 5 strain components.
+[2025-08-01 13:21:39] INFO: ε33 is set to zero
+[2025-08-01 13:21:39] INFO: The model is solving for 5 strain components.
+[2025-08-01 13:21:39] INFO: ε33 is set to zero
+[2025-08-01 13:21:39] INFO: The model is solving for 5 strain components.
+[2025-08-01 13:21:39] INFO: ε33 is set to zero
+[2025-08-01 13:21:39] INFO: The model is solving for 5 strain components.
+[2025-08-01 13:21:39] INFO: ε33 is set to zero
+[2025-08-01 13:21:39] INFO: The model is solving for 5 strain components.
+[2025-08-01 13:21:39] INFO: ε33 is set to zero
+[2025-08-01 13:21:41] INFO: Combined distortion fit plot saved to: ValidationOutputFiles/ceria_lab6_exsitu_71p676keV_1145mm_100x100_3s_002265/q_vs_chi_plot_fitted.png
+[2025-08-01 13:21:41] INFO: Strain vs chi centroid data saved to: ValidationOutputFiles/ceria_lab6_exsitu_71p676keV_1145mm_100x100_3s_002265/strain_vs_chi_peaks.txt
+[2025-08-01 13:21:42] INFO: Overlayed strain vs chi fit plot saved to: ValidationOutputFiles/ceria_lab6_exsitu_71p676keV_1145mm_100x100_3s_002265/strain_vs_chi_fit_overlay.png
+[2025-08-01 13:21:43] INFO: Stacked strain vs chi plot saved to: ValidationOutputFiles/ceria_lab6_exsitu_71p676keV_1145mm_100x100_3s_002265/strain_vs_chi_plot.png
