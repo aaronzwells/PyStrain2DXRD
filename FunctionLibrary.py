@@ -587,7 +587,7 @@ def generate_strain_maps_from_json(json_path, n_rows, n_cols, output_dir="Strain
     logger = logger or logging.getLogger(__name__)
     os.makedirs(output_dir, exist_ok=True)
 
-    # Load strain data
+    # Load strain data from OutputFiles_Data_.../strain_tensor_summary.json
     with open(json_path, 'r') as f:
         strain_data = json.load(f)
 
@@ -600,12 +600,12 @@ def generate_strain_maps_from_json(json_path, n_rows, n_cols, output_dir="Strain
         for i in range(num_rings):
             if i < len(tensors) and isinstance(tensors[i], dict):
                 eps_xx = tensors[i].get("eps_xx", np.nan)
-                eps_yy = tensors[i].get("eps_yy", np.nan)
                 eps_xy = tensors[i].get("eps_xy", np.nan)
+                eps_yy = tensors[i].get("eps_yy", np.nan)
                 eps_xz = tensors[i].get("eps_xz", np.nan)
                 eps_yz = tensors[i].get("eps_yz", np.nan)
                 eps_zz = tensors[i].get("eps_zz", np.nan)
-                filtered[i].append([eps_xx, eps_yy, eps_xy, eps_xz, eps_yz, eps_zz])
+                filtered[i].append([eps_xx, eps_xy, eps_yy, eps_xz, eps_yz, eps_zz])
             else:
                 filtered[i].append([np.nan] * 6)
 
@@ -615,7 +615,7 @@ def generate_strain_maps_from_json(json_path, n_rows, n_cols, output_dir="Strain
     from joblib import Parallel, delayed
     def plot_and_save(data, title, filename):
         x_shift = 0.2
-        plt.figure(figsize=(6, 5), dpi=dpi)
+        plt.figure(figsize=(4.5, 5), dpi=dpi)
         cmap = plt.cm.jet.copy()
         cmap.set_bad(color='white')
         masked_data = np.ma.masked_invalid(data)
@@ -654,16 +654,16 @@ def generate_strain_maps_from_json(json_path, n_rows, n_cols, output_dir="Strain
             raise ValueError(f"Parsed strain tensor shape {flat_array.shape} does not match grid size ({n_rows} x {n_cols}) with 6 components")
         strain_array = flat_array.reshape((n_rows, n_cols, 6))
         eps_xx = strain_array[:, :, 0]
-        eps_yy = strain_array[:, :, 1]
-        eps_xy = strain_array[:, :, 2]
+        eps_xy = strain_array[:, :, 1]
+        eps_yy = strain_array[:, :, 2]
         eps_xz = strain_array[:, :, 3]
         eps_yz = strain_array[:, :, 4]
         eps_zz = strain_array[:, :, 5]
         eps_vm = np.sqrt(((eps_xx - eps_yy)**2 + (eps_yy - eps_zz)**2 + (eps_zz - eps_xx)**2)/2 + 3*(eps_xy**2 + eps_xz**2 + eps_yz**2))
         ring_suffix = f"_ring{ring_index+1}"
         plot_and_save(eps_xx, r'$\varepsilon_{xx}$', f"{map_name_pfx}_xx{ring_suffix}.png")
-        plot_and_save(eps_yy, r'$\varepsilon_{yy}$', f"{map_name_pfx}_yy{ring_suffix}.png")
         plot_and_save(eps_xy, r'$\varepsilon_{xy}$', f"{map_name_pfx}_xy{ring_suffix}.png")
+        plot_and_save(eps_yy, r'$\varepsilon_{yy}$', f"{map_name_pfx}_yy{ring_suffix}.png")
         plot_and_save(eps_xz, r'$\varepsilon_{xz}$', f"{map_name_pfx}_xz{ring_suffix}.png")
         plot_and_save(eps_yz, r'$\varepsilon_{yz}$', f"{map_name_pfx}_yz{ring_suffix}.png")
         plot_and_save(eps_zz, r'$\varepsilon_{zz}$', f"{map_name_pfx}_zz{ring_suffix}.png")
@@ -677,16 +677,16 @@ def generate_strain_maps_from_json(json_path, n_rows, n_cols, output_dir="Strain
 
     # Compute averaged strain maps
     avg_eps_xx = np.nanmean([np.array(ring)[:, 0].reshape(n_rows, n_cols) for ring in filtered], axis=0)
-    avg_eps_yy = np.nanmean([np.array(ring)[:, 1].reshape(n_rows, n_cols) for ring in filtered], axis=0)
-    avg_eps_xy = np.nanmean([np.array(ring)[:, 2].reshape(n_rows, n_cols) for ring in filtered], axis=0)
+    avg_eps_xy = np.nanmean([np.array(ring)[:, 1].reshape(n_rows, n_cols) for ring in filtered], axis=0)
+    avg_eps_yy = np.nanmean([np.array(ring)[:, 2].reshape(n_rows, n_cols) for ring in filtered], axis=0)
     avg_eps_xz = np.nanmean([np.array(ring)[:, 3].reshape(n_rows, n_cols) for ring in filtered], axis=0)
     avg_eps_yz = np.nanmean([np.array(ring)[:, 4].reshape(n_rows, n_cols) for ring in filtered], axis=0)
     avg_eps_zz = np.nanmean([np.array(ring)[:, 5].reshape(n_rows, n_cols) for ring in filtered], axis=0)
     avg_eps_vm = np.sqrt(((avg_eps_xx - avg_eps_yy)**2 + (avg_eps_yy - avg_eps_zz)**2 + (avg_eps_zz - avg_eps_xx)**2)/2 + 3*(avg_eps_xy**2 + avg_eps_xz**2 + avg_eps_yz**2))
 
     plot_and_save(avg_eps_xx, r'$\varepsilon_{xx}$ (Avg)', f"{map_name_pfx}_xx_avg.png")
-    plot_and_save(avg_eps_yy, r'$\varepsilon_{yy}$ (Avg)', f"{map_name_pfx}_yy_avg.png")
     plot_and_save(avg_eps_xy, r'$\varepsilon_{xy}$ (Avg)', f"{map_name_pfx}_xy_avg.png")
+    plot_and_save(avg_eps_yy, r'$\varepsilon_{yy}$ (Avg)', f"{map_name_pfx}_yy_avg.png")
     plot_and_save(avg_eps_xz, r'$\varepsilon_{xz}$ (Avg)', f"{map_name_pfx}_xz_avg.png")
     plot_and_save(avg_eps_yz, r'$\varepsilon_{yz}$ (Avg)', f"{map_name_pfx}_yz_avg.png")
     plot_and_save(avg_eps_zz, r'$\varepsilon_{zz}$ (Avg)', f"{map_name_pfx}_zz_avg.png")
