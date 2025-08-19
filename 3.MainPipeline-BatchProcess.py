@@ -35,7 +35,7 @@ def batch_main_pipeline(input_dir="InputFiles/25C_AO_inputs", n_jobs=-1):
             mask_thresh   = 4e2
             num_azim_bins = 120
             q_min_nm1     = 14.0
-            npt_rad       = 5000
+            npt_rad       = 3000
             delta_tol     = 0.1
             wavelength_nm = 0.1729786687 # [nm] X-ray wavelength
             solved_strain_components = 5 # 3 = biaxial; 5 = biaxial w/ shear; 6 = all components

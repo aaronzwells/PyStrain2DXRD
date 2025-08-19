@@ -440,7 +440,7 @@ def fit_lattice_cone_distortion(q_data, q0_list, wavelength_nm,
         q0_fixed = q0_list[i]
         try:
             # Convert angles to radians for this azimuthal bin set
-            chi_rad   = np.deg2rad(x)
+            chi_rad   = np.deg2rad(90-x) # transform so χ is aligned with the coordinate system in He & Smith 1998
             psi_rad   = np.deg2rad(psi_deg[mask])
             phi_rad   = np.deg2rad(phi_deg[mask])
             omega_rad = np.deg2rad(omega_deg[mask])
