@@ -568,7 +568,7 @@ def fit_lattice_cone_distortion(q_data, q0_list, wavelength_nm,
 
     return strain_array, strain_list, q0_list_out, strain_vs_chi_path
 
-# --- Utility: Generate strain maps from JSON ---------------------------------
+# --- Generate strain maps from JSON ---------------------------------
 def generate_strain_maps_from_json(json_path, n_rows, n_cols, output_dir="StrainMaps", dpi=600, pixel_size=(1.0, 1.0), map_name_pfx="strain-map_", logger=None):
     """
     Generates and saves strain maps (ε_xx, ε_yy, ε_xy, and von Mises strain) from a JSON file 
@@ -691,3 +691,292 @@ def generate_strain_maps_from_json(json_path, n_rows, n_cols, output_dir="Strain
     plot_and_save(avg_eps_yz, r'$\varepsilon_{yz}$ (Avg)', f"{map_name_pfx}_yz_avg.png")
     plot_and_save(avg_eps_zz, r'$\varepsilon_{zz}$ (Avg)', f"{map_name_pfx}_zz_avg.png")
     plot_and_save(avg_eps_vm, r'$\varepsilon_{VM}$ (Avg)', f"{map_name_pfx}_Mises_avg.png")
+
+
+# --- Utility: Generate strain maps from JSON for non-contiguous scan layouts ---
+def generate_strain_maps_from_json_nonContinuous(
+    json_path,
+    n_rows,
+    n_cols,
+    gap_cols=0,
+    gap_mm=None,
+    output_dir="StrainMaps",
+    dpi=600,
+    pixel_size=(1.0, 1.0),
+    map_name_pfx="strain-map_",
+    logger=None,
+):
+    """
+    Generates and saves strain maps (ε_xx, ε_yy, ε_xy, ε_xz, ε_yz, ε_zz, and von Mises)
+    from a JSON file for *non-contiguous* scan layouts, where physical images/points
+    are arranged in `n_cols` columns with `gap_cols` empty columns (no data) inserted
+    between each adjacent pair of real columns (or equivalently a physical gap of `gap_mm`).
+
+    Parameters:
+        json_path (str): Path to the JSON file (strain_tensor_summary.json).
+        n_rows (int): Number of rows in the scanned grid (actual data positions).
+        n_cols (int): Number of columns in the scanned grid (actual data positions).
+        gap_cols (int): Number of *empty* columns to insert between each real column.
+        gap_mm (float or None): Physical gap between real columns in the same units as
+                                pixel_size[0]. If provided, overrides gap_cols using
+                                gap_cols = round(gap_mm / pixel_size[0]).
+        output_dir (str): Directory to save the heatmaps.
+        dpi (int): Dots per inch for saved PNG images.
+        pixel_size (tuple): (x_size, y_size) per pixel in physical units (e.g., mm).
+        map_name_pfx (str): Prefix for saved filenames.
+        logger (logging.Logger): Optional logger instance.
+
+    Notes:
+        - The input JSON is expected to match the structure produced by the pipeline,
+          i.e., a list of entries each with a "strain_tensor" list, one per ring, where
+          each ring is a dict holding eps_xx, eps_xy, eps_yy, eps_xz, eps_yz, eps_zz, and q0.
+        - This function mirrors `generate_strain_maps_from_json` but expands the X grid by
+          inserting `gap_cols` columns of NaNs between each real data column so the rendered
+          heatmaps reflect the non-contiguous spacing.
+    """
+    import os
+    import numpy as np
+    import json
+    import matplotlib.pyplot as plt
+    from matplotlib.ticker import FuncFormatter
+    from joblib import Parallel, delayed
+
+    logger = logger or logging.getLogger(__name__)
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Load strain data
+    with open(json_path, 'r') as f:
+        strain_data = json.load(f)
+
+    # Determine number of rings from the first entry
+    num_rings = len(strain_data[0].get("strain_tensor", []))
+
+    # Normalize gap settings
+    if gap_mm is not None:
+        try:
+            gap_cols = int(round(float(gap_mm) / float(pixel_size[0])))
+        except Exception:
+            logger.exception("Failed to compute gap_cols from gap_mm; falling back to provided gap_cols")
+    gap_cols = max(0, int(gap_cols))
+
+    # Parse all six components per ring for each scan point
+    filtered = [[] for _ in range(num_rings)]
+    for entry in strain_data:
+        tensors = entry.get("strain_tensor", [])
+        for i in range(num_rings):
+            if i < len(tensors) and isinstance(tensors[i], dict):
+                eps_xx = tensors[i].get("eps_xx", np.nan)
+                eps_xy = tensors[i].get("eps_xy", np.nan)
+                eps_yy = tensors[i].get("eps_yy", np.nan)
+                eps_xz = tensors[i].get("eps_xz", np.nan)
+                eps_yz = tensors[i].get("eps_yz", np.nan)
+                eps_zz = tensors[i].get("eps_zz", np.nan)
+                filtered[i].append([eps_xx, eps_xy, eps_yy, eps_xz, eps_yz, eps_zz])
+            else:
+                filtered[i].append([np.nan] * 6)
+
+    # Helper to expand a (n_rows x n_cols) array to include gaps along X
+    def expand_with_gaps(arr_2d, gap_cols):
+        """Insert `gap_cols` NaN columns between each real column."""
+        if gap_cols == 0:
+            return arr_2d
+        rows, cols = arr_2d.shape
+        expanded_cols = cols + (cols - 1) * gap_cols
+        out = np.full((rows, expanded_cols), np.nan, dtype=float)
+        stride = gap_cols + 1
+        for j in range(cols):
+            out[:, j * stride] = arr_2d[:, j]
+        return out
+
+    pixel_size_unit = "mm"
+
+    def plot_and_save(data, title, filename):
+        # Build masked array and compute color limits within 0.2–0.8 mm window
+        plt.figure(figsize=(4.5, 5), dpi=dpi)
+        cmap = plt.cm.jet.copy()
+        cmap.set_bad(color='white')
+        masked_data = np.ma.masked_invalid(data)
+
+        # Physical window for color-limits
+        x_min_win = 0.2
+        x_max_win = 0.8
+        total_width = masked_data.shape[1] * pixel_size[0]
+        # Index window (may span NaN gaps; nanmin/nanmax will ignore gaps)
+        idx0 = max(0, int(np.floor(x_min_win / pixel_size[0])))
+        idx1 = min(masked_data.shape[1], int(np.ceil(x_max_win / pixel_size[0])))
+        subset = masked_data[:, idx0:idx1]
+        data_min = np.nanmin(subset) if subset.count() > 0 else np.nanmin(masked_data)
+        data_max = np.nanmax(subset) if subset.count() > 0 else np.nanmax(masked_data)
+        if not np.isfinite(data_min) or not np.isfinite(data_max):
+            # Fallback to ignoring NaNs globally
+            data_min = np.nanmin(masked_data)
+            data_max = np.nanmax(masked_data)
+
+        # Compute extent accounting for gaps (each column/gap has width pixel_size[0])
+        x_shift = 0.2
+        extent = [-x_shift, masked_data.shape[1] * pixel_size[0] - x_shift, 0, masked_data.shape[0] * pixel_size[1]]
+        im = plt.imshow(masked_data, origin='upper', cmap=cmap, vmin=data_min, vmax=data_max, extent=extent)
+        cb = plt.colorbar(im)
+        cb.set_label('Strain')
+        cb.formatter = FuncFormatter(lambda x, _: f"{x:.3e}")
+        cb.update_ticks()
+        plt.xlim(0.0, 0.6)
+        plt.title(title)
+        plt.xlabel(f'X Position [{pixel_size_unit}]')
+        plt.ylabel(f'Y Position [{pixel_size_unit}]')
+        plt.tight_layout()
+        filepath = os.path.join(output_dir, filename)
+        plt.savefig(filepath)
+        plt.close()
+        logger.info(f"{title} heatmap saved to: {filepath}")
+
+    def _plot_one_ring(ring_index, ring_data):
+        flat_array = np.array(ring_data)
+        if flat_array.shape != (n_rows * n_cols, 6):
+            raise ValueError(
+                f"Parsed strain tensor shape {flat_array.shape} does not match grid size ({n_rows} x {n_cols}) with 6 components"
+            )
+        # Reshape to contiguous grid (rows x cols x 6)
+        strain_array = flat_array.reshape((n_rows, n_cols, 6))
+        # Expand each component along X to insert NaN gaps
+        eps_xx = expand_with_gaps(strain_array[:, :, 0], gap_cols)
+        eps_xy = expand_with_gaps(strain_array[:, :, 1], gap_cols)
+        eps_yy = expand_with_gaps(strain_array[:, :, 2], gap_cols)
+        eps_xz = expand_with_gaps(strain_array[:, :, 3], gap_cols)
+        eps_yz = expand_with_gaps(strain_array[:, :, 4], gap_cols)
+        eps_zz = expand_with_gaps(strain_array[:, :, 5], gap_cols)
+        # Von Mises from components (computed before expansion then expanded to preserve NaNs consistently)
+        vm_base = np.sqrt(
+            ((strain_array[:, :, 0] - strain_array[:, :, 2])**2 +
+             (strain_array[:, :, 2] - strain_array[:, :, 5])**2 +
+             (strain_array[:, :, 5] - strain_array[:, :, 0])**2)/2 +
+            3*(strain_array[:, :, 1]**2 + strain_array[:, :, 3]**2 + strain_array[:, :, 4]**2)
+        )
+        eps_vm = expand_with_gaps(vm_base, gap_cols)
+
+        ring_suffix = f"_ring{ring_index+1}"
+        plot_and_save(eps_xx, r'$\varepsilon_{xx}$', f"{map_name_pfx}_xx{ring_suffix}.png")
+        plot_and_save(eps_xy, r'$\varepsilon_{xy}$', f"{map_name_pfx}_xy{ring_suffix}.png")
+        plot_and_save(eps_yy, r'$\varepsilon_{yy}$', f"{map_name_pfx}_yy{ring_suffix}.png")
+        plot_and_save(eps_xz, r'$\varepsilon_{xz}$', f"{map_name_pfx}_xz{ring_suffix}.png")
+        plot_and_save(eps_yz, r'$\varepsilon_{yz}$', f"{map_name_pfx}_yz{ring_suffix}.png")
+        plot_and_save(eps_zz, r'$\varepsilon_{zz}$', f"{map_name_pfx}_zz{ring_suffix}.png")
+        plot_and_save(eps_vm, r'$\varepsilon_{VM}$', f"{map_name_pfx}_Mises{ring_suffix}.png")
+
+    Parallel(n_jobs=-1)(
+        delayed(_plot_one_ring)(i, filtered[i])
+        for i in range(num_rings)
+    )
+
+    # Averaged maps across rings (compute average on contiguous grid then expand once)
+    avg_eps_xx = np.nanmean([np.array(ring)[:, 0].reshape(n_rows, n_cols) for ring in filtered], axis=0)
+    avg_eps_xy = np.nanmean([np.array(ring)[:, 1].reshape(n_rows, n_cols) for ring in filtered], axis=0)
+    avg_eps_yy = np.nanmean([np.array(ring)[:, 2].reshape(n_rows, n_cols) for ring in filtered], axis=0)
+    avg_eps_xz = np.nanmean([np.array(ring)[:, 3].reshape(n_rows, n_cols) for ring in filtered], axis=0)
+    avg_eps_yz = np.nanmean([np.array(ring)[:, 4].reshape(n_rows, n_cols) for ring in filtered], axis=0)
+    avg_eps_zz = np.nanmean([np.array(ring)[:, 5].reshape(n_rows, n_cols) for ring in filtered], axis=0)
+    avg_eps_vm = np.sqrt(((avg_eps_xx - avg_eps_yy)**2 + (avg_eps_yy - avg_eps_zz)**2 + (avg_eps_zz - avg_eps_xx)**2)/2 + 3*(avg_eps_xy**2 + avg_eps_xz**2 + avg_eps_yz**2))
+
+    # Expand averaged maps with the same gap pattern
+    avg_eps_xx = expand_with_gaps(avg_eps_xx, gap_cols)
+    avg_eps_xy = expand_with_gaps(avg_eps_xy, gap_cols)
+    avg_eps_yy = expand_with_gaps(avg_eps_yy, gap_cols)
+    avg_eps_xz = expand_with_gaps(avg_eps_xz, gap_cols)
+    avg_eps_yz = expand_with_gaps(avg_eps_yz, gap_cols)
+    avg_eps_zz = expand_with_gaps(avg_eps_zz, gap_cols)
+    avg_eps_vm = expand_with_gaps(avg_eps_vm, gap_cols)
+
+    plot_and_save(avg_eps_xx, r'$\\varepsilon_{xx}$ (Avg)', f"{map_name_pfx}_xx_avg.png")
+    plot_and_save(avg_eps_xy, r'$\\varepsilon_{xy}$ (Avg)', f"{map_name_pfx}_xy_avg.png")
+    plot_and_save(avg_eps_yy, r'$\\varepsilon_{yy}$ (Avg)', f"{map_name_pfx}_yy_avg.png")
+    plot_and_save(avg_eps_xz, r'$\\varepsilon_{xz}$ (Avg)', f"{map_name_pfx}_xz_avg.png")
+    plot_and_save(avg_eps_yz, r'$\\varepsilon_{yz}$ (Avg)', f"{map_name_pfx}_yz_avg.png")
+    plot_and_save(avg_eps_zz, r'$\\varepsilon_{zz}$ (Avg)', f"{map_name_pfx}_zz_avg.png")
+    plot_and_save(avg_eps_vm, r'$\\varepsilon_{VM}$ (Avg)', f"{map_name_pfx}_Mises_avg.png")
+
+
+# --- Utility: Reconstruct simulated diffraction rings using fitted strain tensor components ---
+def reconstruct_rings_from_json(json_path, wavelength_nm, chi_step=1.0, logger=None, plot=True, output_dir=None):
+    """
+    Reconstruct simulated diffraction rings using fitted strain tensor components.
+
+    Parameters:
+        json_path (str): Path to strain_tensor_summary.json
+        wavelength_nm (float): X-ray wavelength (nm)
+        chi_step (float): Step size in degrees for χ grid
+        logger (logging.Logger): Optional logger instance
+        plot (bool): Whether to generate plots
+        output_dir (str): Directory to save plots
+
+    Returns:
+        dict: {ring_index: (chi_deg, q_sim)}
+    """
+
+    with open(json_path, "r") as f:
+        strain_data = json.load(f)
+
+    chi_deg = np.arange(0, 360, chi_step)
+    # Apply the same convention correction as in fit_lattice_cone_distortion
+    chi_rad = np.deg2rad(90.0 - chi_deg)
+    results = {}
+
+    for entry in strain_data:
+        if "strain_tensor" not in entry:
+            continue
+        tensors = entry["strain_tensor"]
+        for i, tensor in enumerate(tensors):
+            eps_xx = tensor.get("eps_xx", np.nan)
+            eps_xy = tensor.get("eps_xy", np.nan)
+            eps_yy = tensor.get("eps_yy", np.nan)
+            eps_xz = tensor.get("eps_xz", np.nan)
+            eps_yz = tensor.get("eps_yz", np.nan)
+            eps_zz = tensor.get("eps_zz", np.nan)
+            q0 = tensor.get("q0", None)
+            if q0 is None:
+                if logger:
+                    logger.warning(f"No q0 value found for ring {i+1}; skipping reconstruction.")
+                continue
+
+            phi_rad = 0.0
+            psi_rad = 0.0
+            omega_rad = np.deg2rad(90.0)
+
+            theta = np.arcsin((q0 * wavelength_nm) / (4 * np.pi))
+            cos_theta, sin_theta = np.cos(theta), np.sin(theta)
+
+            a = sin_theta * np.cos(omega_rad) + np.sin(chi_rad) * cos_theta * np.sin(omega_rad)
+            b = -np.cos(chi_rad) * cos_theta
+            c = sin_theta * np.sin(omega_rad) - np.sin(chi_rad) * cos_theta * np.cos(omega_rad)
+
+            A = a*np.cos(phi_rad) - b*np.cos(psi_rad)*np.sin(phi_rad) + c*np.sin(psi_rad)*np.sin(phi_rad)
+            B = a*np.sin(phi_rad) + b*np.cos(psi_rad)*np.cos(phi_rad) - c*np.sin(psi_rad)*np.cos(phi_rad)
+            C = b*np.sin(psi_rad) + c*np.cos(psi_rad)
+
+            f11 = A**2
+            f22 = B**2
+            f33 = C**2
+            f12 = 2 * A * B
+            f13 = 2 * A * C
+            f23 = 2 * B * C
+
+            strain_terms = (f11 * eps_xx + f22 * eps_yy + f33 * eps_zz +
+                            f12 * eps_xy + f13 * eps_xz + f23 * eps_yz)
+
+            q_sim = q0 * np.exp(-strain_terms)
+            if i+1 not in results:
+                results[i+1] = []
+            results[i+1].append((chi_deg, q_sim.tolist()))
+
+            if plot:
+                plt.figure()
+                plt.plot(chi_deg, q_sim, label=f"Ring {i+1} Simulated")
+                plt.xlabel("χ (deg)")
+                plt.ylabel("q (1/nm)")
+                plt.title(f"Reconstructed Ring {i+1}")
+                plt.legend()
+                if output_dir:
+                    os.makedirs(output_dir, exist_ok=True)
+                    plt.savefig(os.path.join(output_dir, f"ring_{i+1}_simulated.png"), dpi=600)
+                plt.close()
+
+    return results
