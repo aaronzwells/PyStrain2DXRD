@@ -1,4 +1,5 @@
 InputFiles/
-OutputFiles*/
+OutputData/
+OutputMaps*/
 __pycache__/
 ValidationOutputFiles/
