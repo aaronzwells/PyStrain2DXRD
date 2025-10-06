@@ -582,6 +582,7 @@ def generate_strain_maps_from_json(
     color_limit_window=None,
     map_offset_xy=(0.0, 0.0),
     trim_edges=False,
+    colorbar_scale=None,
     output_dir="StrainMaps",
     dpi=600,
     map_name_pfx="strain-map_",
@@ -658,7 +659,11 @@ def generate_strain_maps_from_json(
             if np.any(~np.isnan(subset)):
                 data_min, data_max = np.nanmin(subset), np.nanmax(subset)
         
-        norm = mcolors.Normalize(vmin=data_min, vmax=data_max)
+        if colorbar_scale:
+            norm = mcolors.Normalize(vmin=colorbar_scale[0], vmax=colorbar_scale[1])
+        else:
+            norm = mcolors.Normalize(vmin=data_min, vmax=data_max)
+
         pixel_width, pixel_height = pixel_size_map
 
         for i in range(n_rows):
@@ -689,7 +694,7 @@ def generate_strain_maps_from_json(
         ax.set_ylim(y_max_edge, y_min_edge)
         ax.set_aspect('equal', adjustable='box')
         
-        # (Colorbar and labels are unchanged)
+        # Colorbar and label definitions
         sm = ScalarMappable(cmap=cmap, norm=norm)
         cb = fig.colorbar(sm, ax=ax, shrink=0.8, pad=0.05)
         cb.set_label('Strain')

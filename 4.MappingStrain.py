@@ -5,8 +5,8 @@ import time
 
 def map_strain():
     # --- User-Defined Inputs ---
-    json_path = "OutputFiles_Data_VB-APS-SSAO-6_800C_2025.10.03-11.57.50/strain_tensor_summary.json"
-    sample_name = "VB-APS-SSAO-6_800C"
+    json_path = "OutputData/OutputFiles_Data_VB-APS-SSAO-6_30C_cool_2025.10.03-20.43.25/strain_tensor_summary.json"
+    sample_name = "VB-APS-SSAO-6_30C_cool"
     
     # Define the geometric and measurement parameters for mapping
     n_steps_x = 4      # Number of measurement points in the X direction (columns)
@@ -17,15 +17,20 @@ def map_strain():
     start_xy = (0.0, 1.0) # Physical starting coordinate (center of the top-left pixel); (startX, startY) in mm
     gap_mm = None # If an additional gap is added between scanned columns, define it here. Usually this is "None"
     map_offset_xy = (-0.05, -start_xy[1]+pixel_size_map[1]/2) # vector for shifting the map data
-    trim_edges = False # allows the user to trim the pixels left and down from the translated (0,0)
+    trim_edges = True # allows the user to trim the pixels left and down from the translated (0,0)
     color_limit_window = (0.2, 0.8) # Sets the x-range (in mm) used to determine the color scale limits
+    colorbar_scale = (-3.5e-04, 4e-04) # Sets the scale of strain; if uniform scale not desired: None
 
     # --- Script Execution ---
     start_time = time.time()
     batch_time_suffix = time.strftime('%Y.%m.%d-%H.%M.%S', time.localtime(start_time))
 
-    output_directory = fl.create_directory(
-        f"OutputFiles_StrainMaps_{sample_name}_{batch_time_suffix}")
+    if colorbar_scale:
+        output_directory = fl.create_directory(
+            f"OutputMaps_unifiedColorScale/OutputFiles_StrainMaps_{sample_name}_{batch_time_suffix}")
+    else:
+        output_directory = fl.create_directory(
+            f"OutputMaps_defaultColorScale/OutputFiles_StrainMaps_{sample_name}_{batch_time_suffix}")
     
     map_name_pfx = f"{sample_name}_strain-map"
 
@@ -40,6 +45,7 @@ def map_strain():
         map_offset_xy=map_offset_xy,
         trim_edges=trim_edges,
         color_limit_window=color_limit_window,
+        colorbar_scale=colorbar_scale,
         output_dir=output_directory,
         dpi=600,
         map_name_pfx=map_name_pfx)

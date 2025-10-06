@@ -8,12 +8,12 @@ import glob
 import json
 
 # Batch processing for all .tif files in InputFiles/AOInputs
-def batch_main_pipeline(input_dir="InputFiles/800C_AO_inputs", n_jobs=-1):
-    sampleName = "VB-APS-SSAO-6_800C"
+def batch_main_pipeline(input_dir="InputFiles/400C_AO_inputs", n_jobs=-1):
+    sampleName = "VB-APS-SSAO-6_400C"
     start_time = time.time()
     batch_time_suffix = time.strftime('%Y.%m.%d-%H.%M.%S', time.localtime(start_time))
     batch_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(start_time))
-    output_directory = fl.create_directory(f"OutputFiles_Data_{sampleName}_{batch_time_suffix}", logger=None)
+    output_directory = fl.create_directory(f"OutputData/OutputFiles_Data_{sampleName}_{batch_time_suffix}", logger=None)
 
     log_file_path = os.path.join(output_directory, "BatchProcess.log")
     logger = setup_logger(log_file_path, logger_name="Batch")
@@ -40,14 +40,14 @@ def batch_main_pipeline(input_dir="InputFiles/800C_AO_inputs", n_jobs=-1):
             wavelength_nm = 0.1729786687 # [nm] X-ray wavelength
             solved_strain_components = 5 # 3 = biaxial; 5 = biaxial w/ shear; 6 = all components
             initial_q_guesses = [
-                17.960905,
-                24.502082,
-                26.266745,
-                29.974327,
-                35.928976,
-                39.032337,
-                44.513362,
-                45.511905
+                17.911220,
+                24.433947,
+                26.201850,
+                29.895184,
+                35.831000,
+                38.928253,
+                44.393175,
+                45.392588
             ]
             tol_array   = np.array([
                 [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],

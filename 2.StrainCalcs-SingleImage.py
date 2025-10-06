@@ -33,7 +33,7 @@ def setup_logger(log_path, logger_name=None):
 def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tensor_path=None):
     start_time = time.time()
     poni_file     = "calibration/Calibration_LaB6_100x100_3s_r8_mod2.poni"
-    tif_file      = tif_override or "InputFiles/25C_AO_inputs/VB-APS-SSAO-6_25C_Map-AO_000288.avg.tiff"
+    tif_file      = tif_override or "InputFiles/25C_AO_inputs/VB-APS-SSAO-6_25C_Map-AO_000304.avg.tiff"
     mask_thresh   = 4e2 # threshold value for the image mask
     num_azim_bins = 120 # number of azimuthal bins around the data
     q_min_nm1     = 14.0 # q_0 for binning of the data
@@ -42,14 +42,14 @@ def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tenso
     wavelength_nm = 0.1729786687 # [nm] X-ray wavelength
     solved_strain_components = 5 # This is the number of strain components to solve for in the system. # 3 = biaxial; 5 = biaxial w/ shear; 6 = all components
     initial_q_guesses = [
-                17.960905,
-                24.502082,
-                26.266745,
-                29.974327,
-                35.928976,
-                39.032337,
-                44.513362,
-                45.511905
+                17.961188,
+                24.500613,
+                26.267830,
+                29.974002,
+                35.926353,
+                39.034769,
+                44.513621,
+                45.514461
             ]
     # initial_q_guesses = [
     #     17.957430, 

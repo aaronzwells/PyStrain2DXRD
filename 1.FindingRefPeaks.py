@@ -7,7 +7,7 @@ import fabio
 import os
 
 poni_file = "calibration/Calibration_LaB6_100x100_3s_r8_mod2.poni" # calibration PONI file
-tif_file = "InputFiles/25C_SS_bulk_inputs/VB-APS-SSAO-6_25C_SS_bulkStack.tiff" # representative data TIF file
+tif_file = "InputFiles/Reference_0Strain_inputs/VB-APS-SSAO-6_800C_Map-AO_001018.avg.tiff" # representative data TIF file
 
 def main(
         poni_file=poni_file, 
@@ -19,7 +19,7 @@ def main(
     filename = fl.remove_filename_extension(tif_file)
     
     # Creates an output directory of the same name as the mapping image to store all the data for that map image location
-    outputPath = os.path.join("ValidationOutputFiles/PeakFinding", filename)
+    outputPath = os.path.join("PeakFinding", filename)
     output_path = fl.create_directory(outputPath)
     print(f"[INFO] Output Path is {output_path}")
 
