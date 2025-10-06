@@ -31,26 +31,27 @@ def create_directory(path, logger=None):
 # --- Utility: Fit pseudo-Voigt to peaks in a .int file ------------------
 # .int file is generated as from an ideal alumina (corundum) crystal structure
 # from materialsproject.org database (mp-1143) and Vesta to simulate the structure
-def validate_curve_fitting(int_file_path, height_frac=0.1, distance=20, eta0=0.5, delta_tol=0.1, logger=None):
+def fit_peak_centroids(x_data, y_data, height_frac=0.1, distance=20, eta0=0.5, delta_tol=0.1, logger=None):
     """
-    Reads a .int file with columns: 2theta, intensity, (ignored third column),
-    and fits pseudo-Voigt profiles to detect peak centroids.
+    Fits pseudo-Voigt profiles to detect peak centroids from 1D XRD data.
 
+    Args:
+        x_data (np.ndarray): The dispersive axis data (e.g., q or 2-theta).
+        y_data (np.ndarray): The intensity data.
+    
     Returns:
-        peak_positions: List of centroid positions in 2theta.
+        peak_positions (list): List of fitted centroid positions in the units of x_data.
     """
-    import csv
     logger = logger or logging.getLogger(__name__)
 
-    data = np.loadtxt(int_file_path, comments='#')
-    if data.shape[1] < 2:
-        raise ValueError("Expected at least two columns in .int file.")
-    x = data[:, 0]
-    y = data[:, 1]
+    # Data is now passed directly as arguments
+    x = x_data
+    y = y_data
 
     peaks, _ = find_peaks(y, height=np.max(y) * height_frac, distance=distance)
     if len(peaks) == 0:
-        raise ValueError("No peaks found in .int file.")
+        logger.warning("No peaks found in the provided data.")
+        return [] # Return an empty list if no peaks are found
 
     dq = x[1] - x[0]
     widths_bins = peak_widths(y, peaks, rel_height=0.5)[0]
@@ -64,16 +65,15 @@ def validate_curve_fitting(int_file_path, height_frac=0.1, distance=20, eta0=0.5
         try:
             p0 = [y[idx], x0, wid, eta0]
             bounds = ([0, x0 - delta_tol, 0, 0], [np.inf, x0 + delta_tol, np.inf, 1])
+            # Note: Assumes pseudo_voigt function is defined elsewhere in the file
             popt, _ = curve_fit(pseudo_voigt, x[sl], y[sl], p0=p0, bounds=bounds)
             peak_positions.append(popt[1])
         except Exception:
             logger.exception(f"Fit failed at index {idx} with x0={x0:.2f}")
             continue
-    outputFilePath = "AdditionalFiles/FxnValidation/FitPeakLocations-Al2O3.txt"
-    with open(outputFilePath, 'w', newline='') as file:
-        writer = csv.writer(file)
-        for pos in peak_positions:
-            writer.writerow([pos])
+    
+    # The hardcoded file writing has been removed.
+    # The function now only calculates and returns the peak positions.
     return peak_positions
 
 # --- Utility: Convert 2theta from initial fit check into q-space
@@ -568,80 +568,142 @@ def fit_lattice_cone_distortion(q_data, q0_list, wavelength_nm,
 
     return strain_array, strain_list, q0_list_out, strain_vs_chi_path
 
-# --- Utility: Generate strain maps from JSON ---------------------------------
-def generate_strain_maps_from_json(json_path, n_rows, n_cols, output_dir="StrainMaps", dpi=600, pixel_size=(1.0, 1.0), map_name_pfx="strain-map_", logger=None):
+# --- Generate strain maps from JSON ---------------------------------
+# Generates the strain maps without the need to have a different function for contiguous and
+# non-contiguous scan layouts
+def generate_strain_maps_from_json(
+    json_path,
+    n_rows,
+    n_cols,
+    step_size,
+    pixel_size_map,
+    start_xy=(0.0, 0.0),
+    gap_mm=None,
+    color_limit_window=None,
+    map_offset_xy=(0.0, 0.0),
+    trim_edges=False,
+    colorbar_scale=None,
+    output_dir="StrainMaps",
+    dpi=600,
+    map_name_pfx="strain-map_",
+    logger=None,
+):
     """
-    Generates and saves strain maps (ε_xx, ε_yy, ε_xy, and von Mises strain) from a JSON file 
-    containing a list of [eps_xx, eps_yy, eps_xy] per scan image.
-
-    Parameters:
-        json_path (str): Path to the JSON file.
-        n_rows (int): Number of rows in the scanned grid.
-        n_cols (int): Number of columns in the scanned grid.
-        output_dir (str): Directory to save the heatmaps.
-        dpi (int): Dots per inch for saved PNG images.
-        pixel_size (tuple): Tuple (x_size, y_size) for pixel size in desired units (e.g., mm).
-        logger (logging.Logger): Optional logger.
+    Generates physically accurate strain maps by drawing individual rectangles for each data point.
+    Includes options for coordinate shifting and trimming negative axes.
     """
+    import os
+    import numpy as np
+    import json
+    import matplotlib.pyplot as plt
+    import matplotlib.patches as patches
+    import matplotlib.colors as mcolors
+    from matplotlib.ticker import FuncFormatter
+    from matplotlib.cm import ScalarMappable
+    from joblib import Parallel, delayed
 
     logger = logger or logging.getLogger(__name__)
     os.makedirs(output_dir, exist_ok=True)
 
-    # Load strain data from OutputFiles_Data_.../strain_tensor_summary.json
     with open(json_path, 'r') as f:
         strain_data = json.load(f)
 
-    # Determine number of rings from first entry
+    num_points = len(strain_data)
+    if num_points != n_rows * n_cols:
+        raise ValueError(f"Grid dimension mismatch! JSON data points ({num_points}) do not match grid ({n_rows}x{n_cols}).")
+    logger.info(f"Loaded {num_points} data points for a {n_rows}x{n_cols} grid.")
+
     num_rings = len(strain_data[0].get("strain_tensor", []))
-    # Read six strain components per ring entry
+    if gap_mm is None: gap_mm = 0.0
+
     filtered = [[] for _ in range(num_rings)]
+    # (This data filtering loop is unchanged)
     for entry in strain_data:
         tensors = entry.get("strain_tensor", [])
         for i in range(num_rings):
             if i < len(tensors) and isinstance(tensors[i], dict):
-                eps_xx = tensors[i].get("eps_xx", np.nan)
-                eps_xy = tensors[i].get("eps_xy", np.nan)
-                eps_yy = tensors[i].get("eps_yy", np.nan)
-                eps_xz = tensors[i].get("eps_xz", np.nan)
-                eps_yz = tensors[i].get("eps_yz", np.nan)
-                eps_zz = tensors[i].get("eps_zz", np.nan)
-                filtered[i].append([eps_xx, eps_xy, eps_yy, eps_xz, eps_yz, eps_zz])
+                filtered[i].append([
+                    tensors[i].get("eps_xx", np.nan), tensors[i].get("eps_xy", np.nan),
+                    tensors[i].get("eps_yy", np.nan), tensors[i].get("eps_xz", np.nan),
+                    tensors[i].get("eps_yz", np.nan), tensors[i].get("eps_zz", np.nan)
+                ])
             else:
                 filtered[i].append([np.nan] * 6)
 
     pixel_size_unit = "mm"
     
-    from matplotlib.ticker import FuncFormatter
-    from joblib import Parallel, delayed
+    # --- Apply the coordinate offset ---
+    startX, startY = start_xy
+    shiftX, shiftY = map_offset_xy
+    startX += shiftX
+    startY += shiftY
+    
+    dX, dY = step_size
+
     def plot_and_save(data, title, filename):
-        x_shift = 0.2
-        plt.figure(figsize=(4.5, 5), dpi=dpi)
+        # Flipping the data array for plotting
+        data = np.flipud(data)
+
+        fig, ax = plt.subplots(figsize=(3.5, 4), dpi=dpi)
         cmap = plt.cm.jet.copy()
-        cmap.set_bad(color='white')
-        masked_data = np.ma.masked_invalid(data)
-        # crop to the x-range from 0.2 mm to 0.8 mm before computing color limits
-        offset_idx = int(0.2 / pixel_size[0])
-        width_idx  = int((0.8 - 0.2) / pixel_size[0])
-        # subset of columns corresponding to [0.2, 0.8] mm
-        subset = masked_data[:, offset_idx:offset_idx + width_idx]
-        data_min = np.nanmin(subset)
-        data_max = np.nanmax(subset)
-        im = plt.imshow(
-            masked_data,
-            origin='upper',
-            cmap=cmap,
-            vmin=data_min,
-            vmax=data_max,
-            extent=[-x_shift, n_cols * pixel_size[0] - x_shift, 0, n_rows * pixel_size[1]]
-        )
-        cb = plt.colorbar(im)
+        
+        data_min, data_max = np.nanmin(data), np.nanmax(data)
+        if color_limit_window:
+            x_min_win, x_max_win = color_limit_window
+            # Adjust window by the same offset to sample the correct region
+            x_min_win_shifted, x_max_win_shifted = x_min_win + shiftX, x_max_win + shiftX
+            
+            idx0 = max(0, int(np.floor((x_min_win_shifted - startX) / (dX + gap_mm))))
+            idx1 = min(n_cols, int(np.ceil((x_max_win_shifted - startX) / (dX + gap_mm))))
+            subset = data[:, idx0:idx1]
+            if np.any(~np.isnan(subset)):
+                data_min, data_max = np.nanmin(subset), np.nanmax(subset)
+        
+        if colorbar_scale:
+            norm = mcolors.Normalize(vmin=colorbar_scale[0], vmax=colorbar_scale[1])
+        else:
+            norm = mcolors.Normalize(vmin=data_min, vmax=data_max)
+
+        pixel_width, pixel_height = pixel_size_map
+
+        for i in range(n_rows):
+            for j in range(n_cols):
+                strain_val = data[i, j]
+                if np.isnan(strain_val): continue
+                
+                center_x = startX + j * (dX + gap_mm)
+                center_y = startY + i * dY
+                
+                bottom_left_x = center_x - (pixel_width / 2)
+                bottom_left_y = center_y - (pixel_height / 2)
+                
+                rect = patches.Rectangle((bottom_left_x, bottom_left_y), pixel_width, pixel_height, facecolor=cmap(norm(strain_val)))
+                ax.add_patch(rect)
+
+        # --- Calculate map edges and apply trimming ---
+        x_min_edge = startX - (pixel_width / 2)
+        x_max_edge = startX + (n_cols - 1) * (dX + gap_mm) + (pixel_width / 2)        
+        y_max_edge = startY - (pixel_height / 2)
+        y_min_edge = startY + (n_rows - 1) * dY + (pixel_height / 2)
+        
+        if trim_edges:
+            x_min_edge = max(x_min_edge, 0.0)
+            y_min_edge = max(y_min_edge, 0.0)
+            
+        ax.set_xlim(x_min_edge, x_max_edge)
+        ax.set_ylim(y_max_edge, y_min_edge)
+        ax.set_aspect('equal', adjustable='box')
+        
+        # Colorbar and label definitions
+        sm = ScalarMappable(cmap=cmap, norm=norm)
+        cb = fig.colorbar(sm, ax=ax, shrink=0.8, pad=0.05)
         cb.set_label('Strain')
-        cb.formatter = FuncFormatter(lambda x, _: f"{x:.3e}")
+        cb.formatter = FuncFormatter(lambda x, _: f"{x:.1e}")
         cb.update_ticks()
-        plt.xlim(0.0,0.6)
-        plt.title(title)
-        plt.xlabel(f'X Position [{pixel_size_unit}]')
-        plt.ylabel(f'Y Position [{pixel_size_unit}]')
+
+        ax.set_title(title)
+        ax.set_xlabel(f'X Position [{pixel_size_unit}]')
+        ax.set_ylabel(f'Y Position [{pixel_size_unit}]')
         plt.tight_layout()
         filepath = os.path.join(output_dir, filename)
         plt.savefig(filepath)
@@ -649,17 +711,16 @@ def generate_strain_maps_from_json(json_path, n_rows, n_cols, output_dir="Strain
         logger.info(f"{title} heatmap saved to: {filepath}")
 
     def _plot_one_ring(ring_index, ring_data):
-        flat_array = np.array(ring_data)
-        if flat_array.shape != (n_rows * n_cols, 6):
-            raise ValueError(f"Parsed strain tensor shape {flat_array.shape} does not match grid size ({n_rows} x {n_cols}) with 6 components")
-        strain_array = flat_array.reshape((n_rows, n_cols, 6))
+        strain_array = np.array(ring_data).reshape((n_rows, n_cols, 6))
+        
         eps_xx = strain_array[:, :, 0]
         eps_xy = strain_array[:, :, 1]
         eps_yy = strain_array[:, :, 2]
         eps_xz = strain_array[:, :, 3]
         eps_yz = strain_array[:, :, 4]
         eps_zz = strain_array[:, :, 5]
-        eps_vm = np.sqrt(((eps_xx - eps_yy)**2 + (eps_yy - eps_zz)**2 + (eps_zz - eps_xx)**2)/2 + 3*(eps_xy**2 + eps_xz**2 + eps_yz**2))
+        vm_base = np.sqrt(((eps_xx-eps_yy)**2 + (eps_yy-eps_zz)**2 + (eps_zz-eps_xx)**2)/2 + 3*(eps_xy**2 + eps_xz**2 + eps_yz**2))
+
         ring_suffix = f"_ring{ring_index+1}"
         plot_and_save(eps_xx, r'$\varepsilon_{xx}$', f"{map_name_pfx}_xx{ring_suffix}.png")
         plot_and_save(eps_xy, r'$\varepsilon_{xy}$', f"{map_name_pfx}_xy{ring_suffix}.png")
@@ -667,22 +728,18 @@ def generate_strain_maps_from_json(json_path, n_rows, n_cols, output_dir="Strain
         plot_and_save(eps_xz, r'$\varepsilon_{xz}$', f"{map_name_pfx}_xz{ring_suffix}.png")
         plot_and_save(eps_yz, r'$\varepsilon_{yz}$', f"{map_name_pfx}_yz{ring_suffix}.png")
         plot_and_save(eps_zz, r'$\varepsilon_{zz}$', f"{map_name_pfx}_zz{ring_suffix}.png")
-        plot_and_save(eps_vm, r'$\varepsilon_{VM}$', f"{map_name_pfx}_Mises{ring_suffix}.png")
+        plot_and_save(vm_base, r'$\varepsilon_{VM}$', f"{map_name_pfx}_Mises{ring_suffix}.png")
 
-    # Parallel plotting of each ring
-    Parallel(n_jobs=-1)(
-        delayed(_plot_one_ring)(i, filtered[i])
-        for i in range(num_rings)
-    )
+    Parallel(n_jobs=-1)(delayed(_plot_one_ring)(i, filtered[i]) for i in range(num_rings))
 
-    # Compute averaged strain maps
-    avg_eps_xx = np.nanmean([np.array(ring)[:, 0].reshape(n_rows, n_cols) for ring in filtered], axis=0)
-    avg_eps_xy = np.nanmean([np.array(ring)[:, 1].reshape(n_rows, n_cols) for ring in filtered], axis=0)
-    avg_eps_yy = np.nanmean([np.array(ring)[:, 2].reshape(n_rows, n_cols) for ring in filtered], axis=0)
-    avg_eps_xz = np.nanmean([np.array(ring)[:, 3].reshape(n_rows, n_cols) for ring in filtered], axis=0)
-    avg_eps_yz = np.nanmean([np.array(ring)[:, 4].reshape(n_rows, n_cols) for ring in filtered], axis=0)
-    avg_eps_zz = np.nanmean([np.array(ring)[:, 5].reshape(n_rows, n_cols) for ring in filtered], axis=0)
-    avg_eps_vm = np.sqrt(((avg_eps_xx - avg_eps_yy)**2 + (avg_eps_yy - avg_eps_zz)**2 + (avg_eps_zz - avg_eps_xx)**2)/2 + 3*(avg_eps_xy**2 + avg_eps_xz**2 + avg_eps_yz**2))
+    # Averaged maps
+    avg_eps_xx = np.nanmean([np.array(r)[:,0].reshape(n_rows,n_cols) for r in filtered], axis=0)
+    avg_eps_xy = np.nanmean([np.array(r)[:,1].reshape(n_rows,n_cols) for r in filtered], axis=0)
+    avg_eps_yy = np.nanmean([np.array(r)[:,2].reshape(n_rows,n_cols) for r in filtered], axis=0)
+    avg_eps_xz = np.nanmean([np.array(r)[:,3].reshape(n_rows,n_cols) for r in filtered], axis=0)
+    avg_eps_yz = np.nanmean([np.array(r)[:,4].reshape(n_rows,n_cols) for r in filtered], axis=0)
+    avg_eps_zz = np.nanmean([np.array(r)[:,5].reshape(n_rows,n_cols) for r in filtered], axis=0)
+    avg_eps_vm = np.sqrt(((avg_eps_xx-avg_eps_yy)**2 + (avg_eps_yy-avg_eps_zz)**2 + (avg_eps_zz-avg_eps_xx)**2)/2 + 3*(avg_eps_xy**2+avg_eps_xz**2+avg_eps_yz**2))
 
     plot_and_save(avg_eps_xx, r'$\varepsilon_{xx}$ (Avg)', f"{map_name_pfx}_xx_avg.png")
     plot_and_save(avg_eps_xy, r'$\varepsilon_{xy}$ (Avg)', f"{map_name_pfx}_xy_avg.png")
@@ -691,3 +748,89 @@ def generate_strain_maps_from_json(json_path, n_rows, n_cols, output_dir="Strain
     plot_and_save(avg_eps_yz, r'$\varepsilon_{yz}$ (Avg)', f"{map_name_pfx}_yz_avg.png")
     plot_and_save(avg_eps_zz, r'$\varepsilon_{zz}$ (Avg)', f"{map_name_pfx}_zz_avg.png")
     plot_and_save(avg_eps_vm, r'$\varepsilon_{VM}$ (Avg)', f"{map_name_pfx}_Mises_avg.png")
+
+# --- Utility: Reconstruct simulated diffraction rings using fitted strain tensor components ---
+def reconstruct_rings_from_json(json_path, wavelength_nm, chi_step=1.0, logger=None, plot=True, output_dir=None):
+    """
+    Reconstruct simulated diffraction rings using fitted strain tensor components.
+
+    Parameters:
+        json_path (str): Path to strain_tensor_summary.json
+        wavelength_nm (float): X-ray wavelength (nm)
+        chi_step (float): Step size in degrees for χ grid
+        logger (logging.Logger): Optional logger instance
+        plot (bool): Whether to generate plots
+        output_dir (str): Directory to save plots
+
+    Returns:
+        dict: {ring_index: (chi_deg, q_sim)}
+    """
+
+    with open(json_path, "r") as f:
+        strain_data = json.load(f)
+
+    chi_deg = np.arange(0, 360, chi_step)
+    # Apply the same convention correction as in fit_lattice_cone_distortion
+    chi_rad = np.deg2rad(90.0 - chi_deg)
+    results = {}
+
+    for entry in strain_data:
+        if "strain_tensor" not in entry:
+            continue
+        tensors = entry["strain_tensor"]
+        for i, tensor in enumerate(tensors):
+            eps_xx = tensor.get("eps_xx", np.nan)
+            eps_xy = tensor.get("eps_xy", np.nan)
+            eps_yy = tensor.get("eps_yy", np.nan)
+            eps_xz = tensor.get("eps_xz", np.nan)
+            eps_yz = tensor.get("eps_yz", np.nan)
+            eps_zz = tensor.get("eps_zz", np.nan)
+            q0 = tensor.get("q0", None)
+            if q0 is None:
+                if logger:
+                    logger.warning(f"No q0 value found for ring {i+1}; skipping reconstruction.")
+                continue
+
+            phi_rad = 0.0
+            psi_rad = 0.0
+            omega_rad = np.deg2rad(90.0)
+
+            theta = np.arcsin((q0 * wavelength_nm) / (4 * np.pi))
+            cos_theta, sin_theta = np.cos(theta), np.sin(theta)
+
+            a = sin_theta * np.cos(omega_rad) + np.sin(chi_rad) * cos_theta * np.sin(omega_rad)
+            b = -np.cos(chi_rad) * cos_theta
+            c = sin_theta * np.sin(omega_rad) - np.sin(chi_rad) * cos_theta * np.cos(omega_rad)
+
+            A = a*np.cos(phi_rad) - b*np.cos(psi_rad)*np.sin(phi_rad) + c*np.sin(psi_rad)*np.sin(phi_rad)
+            B = a*np.sin(phi_rad) + b*np.cos(psi_rad)*np.cos(phi_rad) - c*np.sin(psi_rad)*np.cos(phi_rad)
+            C = b*np.sin(psi_rad) + c*np.cos(psi_rad)
+
+            f11 = A**2
+            f22 = B**2
+            f33 = C**2
+            f12 = 2 * A * B
+            f13 = 2 * A * C
+            f23 = 2 * B * C
+
+            strain_terms = (f11 * eps_xx + f22 * eps_yy + f33 * eps_zz +
+                            f12 * eps_xy + f13 * eps_xz + f23 * eps_yz)
+
+            q_sim = q0 * np.exp(-strain_terms)
+            if i+1 not in results:
+                results[i+1] = []
+            results[i+1].append((chi_deg, q_sim.tolist()))
+
+            if plot:
+                plt.figure()
+                plt.plot(chi_deg, q_sim, label=f"Ring {i+1} Simulated")
+                plt.xlabel("χ (deg)")
+                plt.ylabel("q (1/nm)")
+                plt.title(f"Reconstructed Ring {i+1}")
+                plt.legend()
+                if output_dir:
+                    os.makedirs(output_dir, exist_ok=True)
+                    plt.savefig(os.path.join(output_dir, f"ring_{i+1}_simulated.png"), dpi=600)
+                plt.close()
+
+    return results
