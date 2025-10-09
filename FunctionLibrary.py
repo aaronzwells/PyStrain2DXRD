@@ -834,3 +834,210 @@ def reconstruct_rings_from_json(json_path, wavelength_nm, chi_step=1.0, logger=N
                 plt.close()
 
     return results
+
+# --- Generate stress maps from JSON ---
+def generate_stress_maps_from_json(
+    json_path,
+    youngs_modulus,
+    poissons_ratio,
+    n_rows,
+    n_cols,
+    step_size,
+    pixel_size_map,
+    start_xy=(0.0, 0.0),
+    gap_mm=None,
+    color_limit_window=None,
+    map_offset_xy=(0.0, 0.0),
+    trim_edges=False,
+    colorbar_scale=None,
+    output_dir="StressMaps",
+    dpi=600,
+    map_name_pfx="stress-map_",
+    logger=None,
+):
+    """
+    Calculates stress from strain data in a JSON file and generates physically accurate stress maps.
+    Assumes an isotropic, linear elastic material under a plane strain condition (eps_zz = 0).
+    """
+    import os
+    import numpy as np
+    import json
+    import matplotlib.pyplot as plt
+    import matplotlib.patches as patches
+    import matplotlib.colors as mcolors
+    from matplotlib.ticker import FuncFormatter
+    from matplotlib.cm import ScalarMappable
+    from joblib import Parallel, delayed
+
+    logger = logger or logging.getLogger(__name__)
+    os.makedirs(output_dir, exist_ok=True)
+
+    with open(json_path, 'r') as f:
+        strain_data = json.load(f)
+    
+    # --- Strain to Stress Conversion ---
+    E = youngs_modulus * 1e9  # Convert GPa to Pa
+    nu = poissons_ratio
+
+    # Lamé parameters
+    lam = (E * nu) / ((1 + nu) * (1 - 2 * nu))
+    G = E / (2 * (1 + nu))  # Shear modulus
+
+    stress_data = []
+    for entry in strain_data:
+        stress_tensors = []
+        for strain_tensor in entry['strain_tensor']:
+            eps_xx = strain_tensor.get('eps_xx', np.nan)
+            eps_xy = strain_tensor.get('eps_xy', np.nan)
+            eps_yy = strain_tensor.get('eps_yy', np.nan)
+            eps_xz = strain_tensor.get('eps_xz', np.nan)
+            eps_yz = strain_tensor.get('eps_yz', np.nan)
+            eps_zz = 0.0 # Assuming plane strain as per the data format
+            
+            if np.isnan(eps_xx):
+                stress_tensors.append({k: np.nan for k in ['sigma_xx', 'sigma_xy', 'sigma_yy', 'sigma_xz', 'sigma_yz', 'sigma_zz']})
+                continue
+            
+            trace_eps = eps_xx + eps_yy + eps_zz
+            
+            # Hooke's Law for isotropic material (in Pa)
+            sigma_xx = 2 * G * eps_xx + lam * trace_eps
+            sigma_yy = 2 * G * eps_yy + lam * trace_eps
+            sigma_zz = lam * trace_eps # Non-zero for plane strain
+            sigma_xy = 2 * G * eps_xy
+            sigma_xz = 2 * G * eps_xz
+            sigma_yz = 2 * G * eps_yz
+
+            stress_tensors.append({
+                "sigma_xx": sigma_xx / 1e6, "sigma_xy": sigma_xy / 1e6, # Convert to MPa
+                "sigma_yy": sigma_yy / 1e6, "sigma_xz": sigma_xz / 1e6,
+                "sigma_yz": sigma_yz / 1e6, "sigma_zz": sigma_zz / 1e6,
+            })
+        stress_data.append(stress_tensors)
+
+    # The rest of the function is similar to the strain mapping function
+    num_points = len(stress_data)
+    if num_points != n_rows * n_cols:
+        raise ValueError(f"Grid dimension mismatch! JSON data points ({num_points}) do not match grid ({n_rows}x{n_cols}).")
+    logger.info(f"Calculated stress for {num_points} points on a {n_rows}x{n_cols} grid.")
+
+    num_rings = len(stress_data[0]) if stress_data else 0
+    if gap_mm is None: gap_mm = 0.0
+
+    filtered = [[] for _ in range(num_rings)]
+    for tensors in stress_data:
+        for i in range(num_rings):
+            if i < len(tensors) and isinstance(tensors[i], dict):
+                filtered[i].append([
+                    tensors[i].get("sigma_xx", np.nan), tensors[i].get("sigma_xy", np.nan),
+                    tensors[i].get("sigma_yy", np.nan), tensors[i].get("sigma_xz", np.nan),
+                    tensors[i].get("sigma_yz", np.nan), tensors[i].get("sigma_zz", np.nan)
+                ])
+            else:
+                filtered[i].append([np.nan] * 6)
+
+    pixel_size_unit = "mm"
+    startX, startY = start_xy
+    shiftX, shiftY = map_offset_xy
+    startX += shiftX
+    startY += shiftY
+    dX, dY = step_size
+
+    def plot_and_save(data, title, filename):
+        data = np.flipud(data)
+        fig, ax = plt.subplots(figsize=(3.5, 4), dpi=dpi)
+        cmap = plt.cm.jet.copy()
+        
+        data_min, data_max = np.nanmin(data), np.nanmax(data)
+        if color_limit_window:
+            x_min_win, x_max_win = color_limit_window
+            x_min_win_shifted, x_max_win_shifted = x_min_win + shiftX, x_max_win + shiftX
+            idx0 = max(0, int(np.floor((x_min_win_shifted - startX) / (dX + gap_mm))))
+            idx1 = min(n_cols, int(np.ceil((x_max_win_shifted - startX) / (dX + gap_mm))))
+            subset = data[:, idx0:idx1]
+            if np.any(~np.isnan(subset)):
+                data_min, data_max = np.nanmin(subset), np.nanmax(subset)
+        
+        norm = mcolors.Normalize(vmin=colorbar_scale[0] if colorbar_scale else data_min,
+                                 vmax=colorbar_scale[1] if colorbar_scale else data_max)
+
+        pixel_width, pixel_height = pixel_size_map
+
+        for i in range(n_rows):
+            for j in range(n_cols):
+                val = data[i, j]
+                if np.isnan(val): continue
+                center_x, center_y = startX + j * (dX + gap_mm), startY + i * dY
+                bottom_left_x, bottom_left_y = center_x - (pixel_width / 2), center_y - (pixel_height / 2)
+                rect = patches.Rectangle((bottom_left_x, bottom_left_y), pixel_width, pixel_height, facecolor=cmap(norm(val)))
+                ax.add_patch(rect)
+
+        x_min_edge = startX - (pixel_width / 2)
+        x_max_edge = startX + (n_cols - 1) * (dX + gap_mm) + (pixel_width / 2)        
+        y_max_edge = startY - (pixel_height / 2)
+        y_min_edge = startY + (n_rows - 1) * dY + (pixel_height / 2)
+        
+        if trim_edges:
+            x_min_edge = max(x_min_edge, 0.0)
+            y_min_edge = max(y_min_edge, 0.0)
+            
+        ax.set_xlim(x_min_edge, x_max_edge)
+        ax.set_ylim(y_max_edge, y_min_edge)
+        ax.set_aspect('equal', adjustable='box')
+        
+        sm = ScalarMappable(cmap=cmap, norm=norm)
+        cb = fig.colorbar(sm, ax=ax, shrink=0.8, pad=0.05)
+        cb.set_label('Stress (MPa)')
+        cb.update_ticks()
+
+        ax.set_title(title)
+        ax.set_xlabel(f'X Position [{pixel_size_unit}]')
+        ax.set_ylabel(f'Y Position [{pixel_size_unit}]')
+        plt.tight_layout()
+        filepath = os.path.join(output_dir, filename)
+        plt.savefig(filepath)
+        plt.close()
+        logger.info(f"{title} heatmap saved to: {filepath}")
+
+    def _plot_one_ring(ring_index, ring_data):
+        stress_array = np.array(ring_data).reshape((n_rows, n_cols, 6))
+        
+        sigma_xx = stress_array[:, :, 0]
+        sigma_xy = stress_array[:, :, 1]
+        sigma_yy = stress_array[:, :, 2]
+        sigma_xz = stress_array[:, :, 3]
+        sigma_yz = stress_array[:, :, 4]
+        sigma_zz = stress_array[:, :, 5]
+        
+        # Von Mises Stress Calculation
+        vm_stress = np.sqrt(0.5 * ((sigma_xx-sigma_yy)**2 + (sigma_yy-sigma_zz)**2 + (sigma_zz-sigma_xx)**2) + 
+                            3 * (sigma_xy**2 + sigma_xz**2 + sigma_yz**2))
+
+        ring_suffix = f"_ring{ring_index+1}"
+        plot_and_save(sigma_xx, r'$\sigma_{xx}$', f"{map_name_pfx}_xx{ring_suffix}.png")
+        plot_and_save(sigma_xy, r'$\sigma_{xy}$', f"{map_name_pfx}_xy{ring_suffix}.png")
+        plot_and_save(sigma_yy, r'$\sigma_{yy}$', f"{map_name_pfx}_yy{ring_suffix}.png")
+        plot_and_save(sigma_xz, r'$\sigma_{xz}$', f"{map_name_pfx}_xz{ring_suffix}.png")
+        plot_and_save(sigma_yz, r'$\sigma_{yz}$', f"{map_name_pfx}_yz{ring_suffix}.png")
+        plot_and_save(sigma_zz, r'$\sigma_{zz}$', f"{map_name_pfx}_zz{ring_suffix}.png")
+        plot_and_save(vm_stress, r'$\sigma_{VM}$ (von Mises)', f"{map_name_pfx}_Mises{ring_suffix}.png")
+
+    Parallel(n_jobs=-1)(delayed(_plot_one_ring)(i, filtered[i]) for i in range(num_rings))
+
+    # Averaged maps
+    avg_s_xx = np.nanmean([np.array(r)[:,0].reshape(n_rows,n_cols) for r in filtered], axis=0)
+    avg_s_xy = np.nanmean([np.array(r)[:,1].reshape(n_rows,n_cols) for r in filtered], axis=0)
+    avg_s_yy = np.nanmean([np.array(r)[:,2].reshape(n_rows,n_cols) for r in filtered], axis=0)
+    avg_s_xz = np.nanmean([np.array(r)[:,3].reshape(n_rows,n_cols) for r in filtered], axis=0)
+    avg_s_yz = np.nanmean([np.array(r)[:,4].reshape(n_rows,n_cols) for r in filtered], axis=0)
+    avg_s_zz = np.nanmean([np.array(r)[:,5].reshape(n_rows,n_cols) for r in filtered], axis=0)
+    avg_s_vm = np.sqrt(0.5 * ((avg_s_xx-avg_s_yy)**2 + (avg_s_yy-avg_s_zz)**2 + (avg_s_zz-avg_s_xx)**2) + 
+                       3 * (avg_s_xy**2 + avg_s_xz**2 + avg_s_yz**2))
+
+    plot_and_save(avg_s_xx, r'$\sigma_{xx}$ (Avg)', f"{map_name_pfx}_xx_avg.png")
+    plot_and_save(avg_s_xy, r'$\sigma_{xy}$ (Avg)', f"{map_name_pfx}_xy_avg.png")
+    plot_and_save(avg_s_yy, r'$\sigma_{yy}$ (Avg)', f"{map_name_pfx}_yy_avg.png")
+    plot_and_save(avg_s_xz, r'$\sigma_{xz}$ (Avg)', f"{map_name_pfx}_xz_avg.png")
+    plot_and_save(avg_s_yz, r'$\sigma_{yz}$ (Avg)', f"{map_name_pfx}_yz_avg.png")
+    plot_and_save(avg_s_zz, r'$\sigma_{zz}$ (Avg)', f"{map_name_pfx}_zz_avg.png")
+    plot_and_save(avg_s_vm, r'$\sigma_{VM}$ (Avg)', f"{map_name_pfx}_Mises_avg.png")
