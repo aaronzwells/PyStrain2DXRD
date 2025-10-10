@@ -136,6 +136,7 @@ def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tenso
     # Fit the full strain tensor using least squares and the full tensor model
     strain_tensor_components, strain_list, q0_list, strain_vs_chi_file = fl.fit_lattice_cone_distortion(
         q_data=q_vs_chi,
+        q_errors=q_vs_chi_errors,
         q0_list=initial_q_guesses,
         wavelength_nm=wavelength_nm,
         chi_deg=chi,
