@@ -34,6 +34,7 @@ def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tenso
     start_time = time.time()
     poni_file     = "calibration/Calibration_LaB6_100x100_3s_r8_mod2.poni"
     tif_file      = tif_override or "InputFiles/25C_AO_inputs/VB-APS-SSAO-6_25C_Map-AO_000304.avg.tiff"
+    save_chi_files = False # this determines whether every q vs chi bin dataset is saved as a separate file or if the file writing is skipped
     mask_thresh   = 4e2 # threshold value for the image mask
     num_azim_bins = 120 # number of azimuthal bins around the data
     q_min_nm1     = 14.0 # q_0 for binning of the data
@@ -110,11 +111,12 @@ def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tenso
         q_min=q_min_nm1,
         npt_rad=npt_rad,
         output_dir=chi_path,
+        save_chi_files=save_chi_files,
         logger=file_logger
     )
 
     # Fits the q vs χ data to the Pseudo-Voigt function to find the peak centroids for each bin and ring
-    q_vs_chi, q_chi_path = fl.fit_peaks_with_initial_guesses(
+    q_vs_chi, q_vs_chi_errors, q_chi_path = fl.fit_peaks_with_initial_guesses(
         I2d, 
         q, 
         initial_q_guesses, 

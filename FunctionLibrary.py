@@ -9,6 +9,7 @@ import imageio.v2 as imageio
 import pyFAI, fabio
 import logging
 import json
+import statsmodels.api as sm
 
 
 # --- Utility: Removes the extension from a file name
@@ -156,7 +157,7 @@ def load_integrator_and_data(poni_path, tif_path, output_path, ref_tif_path=None
     # No mask computation; return None for mask
     return ai, data_adj, None
 
-def integrate_2d(ai, data, mask, num_azim_bins=360, q_min=16.0, npt_rad=5000, output_dir=None, logger=None):
+def integrate_2d(ai, data, mask, num_azim_bins=360, q_min=16.0, npt_rad=5000, output_dir=None, save_chi_files=False, logger=None):
     """
     Use pyFAI to integrate the 2D pattern into azimuthal bins using pyFAI's integrate2d.
     Saves each azimuthal bin's q and intensity values as a .chi file (Fit2D style).
@@ -207,14 +208,15 @@ def integrate_2d(ai, data, mask, num_azim_bins=360, q_min=16.0, npt_rad=5000, ou
     I2d = I2d[order]
 
     # Save each azimuthal bin's pattern as a .chi file
-    for i, chi_val in enumerate(chi):
-        chi_deg = chi_val  # * (num_azim_bins/360)
-        filename = os.path.join(output_dir, f"azim_{int(round(chi_deg))}deg.chi")
-        with open(filename, 'w') as f:
-            f.write(f"# Azimuthal bin: {chi_deg:.2f} deg\n")
-            f.write("# Columns: q (nm^-1), Intensity (a.u.)\n")
-            for q_val, I_val in zip(q, I2d[i]):
-                f.write(f"{q_val:.6f} {I_val:.6f}\n")
+    if save_chi_files==True:
+        for i, chi_val in enumerate(chi):
+            chi_deg = chi_val  # * (num_azim_bins/360)
+            filename = os.path.join(output_dir, f"azim_{int(round(chi_deg))}deg.chi")
+            with open(filename, 'w') as f:
+                f.write(f"# Azimuthal bin: {chi_deg:.2f} deg\n")
+                f.write("# Columns: q (nm^-1), Intensity (a.u.)\n")
+                for q_val, I_val in zip(q, I2d[i]):
+                    f.write(f"{q_val:.6f} {I_val:.6f}\n")
 
     fig_filename = os.path.join(output_dir, "q_vs_chi_plot.png")
     logger.info(f"Stacked q vs chi plot saved to: {fig_filename}")
@@ -388,7 +390,7 @@ def plot_strain_vs_chi_stacked(file_path, output_dir=None, chi_deg=None, dpi=600
         logger.info(f"Stacked strain vs chi plot saved to: {scatter_path}")
 
 # --- Compute full strain tensor ----------------------------------------
-def fit_lattice_cone_distortion(q_data, q0_list, wavelength_nm,
+def fit_lattice_cone_distortion(q_data, q_errors, q0_list, wavelength_nm,
                                 chi_deg=None, psi_deg=None, phi_deg=None, omega_deg=None, num_strain_components=3, output_dir=None, dpi=600, plot=True, logger=None):
     """
     Fits lattice cone distortion model to q(chi) data to extract in-plane strain tensor components.
@@ -410,7 +412,6 @@ def fit_lattice_cone_distortion(q_data, q0_list, wavelength_nm,
         strain_vs_chi_path (str): File path of saved strain vs chi data
     """
     logger = logger or logging.getLogger(__name__)
-
     os.makedirs(output_dir, exist_ok=True)
     # collect fitted strain-vs-chi curves for overlay
     fit_vs_chi = []
@@ -429,29 +430,27 @@ def fit_lattice_cone_distortion(q_data, q0_list, wavelength_nm,
         omega_deg = np.full_like(chi_deg, 90.0) # ω = 90°
 
     strain_params = []
-    axes = None
-    if plot:
-        fig, axes = plt.subplots(n_rings, 1, figsize=(10, 2 * n_rings), dpi=dpi, sharex=True)
-        if n_rings == 1:
-            axes = [axes]
+    fig, axes = (plt.subplots(n_rings, 1, figsize=(10, 2 * n_rings), dpi=dpi, sharex=True) if plot else (None, None))
+    if plot and n_rings == 1: axes = [axes]
 
     # y limits for the strain vs chi plots
-    y_min = -0.0015
-    y_max = 0.0015
+    y_min, y_max = -0.0015, 0.0015
+
+    nan_dict = {key: np.nan for key in ['q0', 'eps_xx', 'eps_xy', 'eps_yy', 'eps_xz', 'eps_yz', 'eps_zz', 
+                                        'eps_xx_err', 'eps_xy_err', 'eps_yy_err', 'eps_xz_err', 'eps_yz_err', 'eps_zz_err']}
 
     for i in range(n_rings):
         q_vals = q_data[i]
-        mask = ~np.isnan(q_vals)
-        x, y = chi_deg[mask], q_vals[mask]
+        q_errs = q_errors[i]
+        
+        mask = ~np.isnan(q_vals) & ~np.isnan(q_errs)
+        x, y, y_err = chi_deg[mask], q_vals[mask], q_errs[mask]
 
         if len(x) < 20:
-            logger.warning(f"Ring {i+1}: insufficient data points ({len(x)} < 20). Skipping fit.")
+            logger.warning(f"Ring {i+1}: insufficient data points ({len(x)} < 20). Skipping.")
             if plot:
-                ax = axes[i] if n_rings > 1 else axes[0]
-                ax.set_title(f"Ring {i+1}: insufficient data")
-                ax.axis('off')
-            strain_params.append([np.nan]*7)
-            # Append NaN fit for overlay plot as well
+                axes[i].set_title(f"Ring {i+1}: insufficient data"); axes[i].axis('off')
+            strain_params.append(nan_dict.copy()) # creates a dictionary of NaN values if the ring is skipped
             fit_vs_chi.append(np.full(n_bins, np.nan))
             continue
 
@@ -468,7 +467,7 @@ def fit_lattice_cone_distortion(q_data, q0_list, wavelength_nm,
             cos_chi   = np.cos(chi_rad)
             sin_theta = np.sin(theta)
             cos_theta = np.cos(theta)
-            # Intermediate parameters a, b, c from Table 1
+            # Intermediate parameters a, b, c from Table 1 He & Smith 1998
             a = sin_theta * np.cos(omega_rad) + sin_chi * cos_theta * np.sin(omega_rad)
             b = -cos_chi * cos_theta
             c = sin_theta * np.sin(omega_rad) - sin_chi * cos_theta * np.cos(omega_rad)
@@ -476,73 +475,65 @@ def fit_lattice_cone_distortion(q_data, q0_list, wavelength_nm,
             A = a * np.cos(phi_rad) - b * np.cos(psi_rad) * np.sin(phi_rad) + c * np.sin(psi_rad) * np.sin(phi_rad)
             B = a * np.sin(phi_rad) + b * np.cos(psi_rad) * np.cos(phi_rad) - c * np.sin(psi_rad) * np.cos(phi_rad)
             C = b * np.sin(psi_rad) + c * np.cos(psi_rad)
+            # Defining the strain coefficients: f_ij
+            f11, f12, f22, f13, f23, f33 = A**2, 2*A*B, B**2, 2*A*C, 2*B*C, C**2
+            
+            # --- Model Definition ---
+            F_all = np.vstack([f11, f12, f22, f13, f23, f33]).T
+            y_meas = np.log(q0_fixed / y)
+            
+            # --- Error Propagation for Weights ---
+            # Error in y_meas = ln(q0/q) is approx. sigma_q / q
+            y_meas_err = y_err / y
+            weights = 1.0 / (y_meas_err**2)
             
             epsilon = '\u03B5' # ε
             logger.info(f"The model is solving for {num_strain_components} strain components.")
             if num_strain_components == 6:
-                # Strain coefficients f_ij
-                f11 = A**2
-                f12 = 2 * A * B
-                f22 = B**2
-                f13 = 2 * A * C
-                f23 = 2 * B * C
-                f33 = C**2
+                F = F_all
+                param_names = ['eps_xx', 'eps_xy', 'eps_yy', 'eps_xz', 'eps_yz', 'eps_zz']
                 if i==1: logger.info(f"No strain components are set to 0")
             elif num_strain_components == 5:
-                f11 = A**2
-                f12 = 2 * A * B
-                f22 = B**2
-                f13 = 2 * A * C
-                f23 = 2 * B * C
-                # out-of-plane normal strain zeroed as array
-                f33 = np.zeros_like(A)
+                F = F_all[:, [0, 1, 2, 3, 4]]
+                param_names = ['eps_xx', 'eps_xy', 'eps_yy', 'eps_xz', 'eps_yz']
                 if i==1: logger.info(f"{epsilon}33 is set to zero")
             elif num_strain_components == 3:
-                f11 = A**2
-                f12 = 2 * A * B
-                f22 = B**2
-                # out-of-plane strain components zeroed as array
-                f13 = np.zeros_like(A)
-                f23 = np.zeros_like(A)
-                f33 = np.zeros_like(A)
+                F = F_all[:, [0, 1, 2]]
+                param_names = ['eps_xx', 'eps_xy', 'eps_yy']
                 if i==1: logger.info(f"{epsilon}13, {epsilon}23, & {epsilon}33 are set to zero")
             else: 
-                f11 = A**2
-                f12 = 2 * A * B
-                f22 = B**2
-                f13 = np.zeros_like(A)
-                f23 = np.zeros_like(A)
-                f33 = np.zeros_like(A)
+                F = F_all[:, [0, 1, 2]]
+                param_names = ['eps_xx', 'eps_xy', 'eps_yy']
                 if i==1: logger.warning(f"An incompatible number of strain components was selected. The only valid numbers are 3 (biaxial), 5 (biaxial w/ shear) & 6 (full strain tensor). Defaulting to biaxial.")
 
-            # Build design matrix and measured y = ln(q0/q)
-            F    = np.vstack([f11, f12, f22, f13, f23, f33]).T
-            y_meas = np.log(q0_fixed / y)
-            # Solve least squares
-            eps, *_ = np.linalg.lstsq(F, y_meas, rcond=None)
-            eps11, eps12, eps22, eps13, eps23, eps33 = eps
-            strain_params.append([q0_fixed, eps11, eps12, eps22, eps13, eps23, eps33])
-            # compute fitted strain vs chi using fixed θ0
-            y_fit = F.dot(eps)
-            # expand to full array
-            fit_full = np.full(n_bins, np.nan)
-            fit_full[mask] = y_fit
-            fit_vs_chi.append(fit_full)
+            # --- Weighted Least Squares Fit and result processing ---
+            wls_model = sm.WLS(y_meas, F, weights=weights)
+            results = wls_model.fit()
+            
+            # Store results and errors
+            params = {f'{p}': val for p, val in zip(param_names, results.params)}
+            errors = {f'{p}_err': err for p, err in zip(param_names, results.bse)}
+            
+            # Fill in NaNs for components not in the fit
+            full_params = nan_dict.copy()
+            full_params['q0'] = q0_fixed
+            # full_errors = {key+'_err': np.nan for key in full_params if key != 'q0'}
+            full_params.update(params)
+            full_params.update(errors)
+            
+            strain_params.append(full_params)
+
             if plot:
-                ax = axes[i] if n_rings > 1 else axes[0]
-                y_fit_lin = F.dot(eps)
-                ax.plot(x, y_meas, '.', markersize=3, label='ln(q0/q)')
-                ax.plot(x, y_fit_lin, '-', label=f'fit equation')
-                ax.set_ylabel(f'{epsilon}=ln(q0/q)')
+                ax = axes[i]
+                ax.plot(x, y_meas, '.', markersize=3, label='ln(q₀/q)')
+                ax.plot(x, results.fittedvalues, '-', label='Fit') # Use results.fittedvalues
+                ax.set_ylabel(f'{epsilon}=ln(q₀/q)')
                 ax.set_title(f'Ring {i+1}')
-                ax.legend(fontsize='small', loc='lower left', bbox_to_anchor=(1.02,0.02))
+                ax.legend(fontsize='small', loc='lower left', bbox_to_anchor=(1.02, 0.02))
         except Exception:
             if plot:
-                ax = axes[i] if n_rings > 1 else axes[0]
-                ax.set_title(f"Ring {i+1}: fit failed")
-                ax.axis('off')
-            strain_params.append([np.nan]*7)
-            # Also append NaN fit for overlay plot
+                axes[i].set_title(f"Ring {i+1}: fit failed"); axes[i].axis('off')
+            strain_params.append(nan_dict.copy())
             fit_vs_chi.append(np.full(n_bins, np.nan))
             logger.exception(f"Fit failed for Ring {i+1}")
 
@@ -554,28 +545,24 @@ def fit_lattice_cone_distortion(q_data, q0_list, wavelength_nm,
         plt.close(fig)
         logger.info(f"Combined distortion fit plot saved to: {fig_path}")
 
-    # Convert strain_params to numpy array and save all six strain tensor components (excluding q0)
-    strain_array = np.array([
-        row[1:] if row is not None and len(row) == 7 
-               else [np.nan] * 6
-        for row in strain_params
-    ])
+    # OUTDATED Convert strain_params to numpy array and save all six strain tensor components (excluding q0)
+    # strain_keys = ['eps_xx', 'eps_xy', 'eps_yy', 'eps_xz', 'eps_yz', 'eps_zz']
+    # strain_array = np.array([[p.get(key, np.nan) for key in strain_keys] for p in strain_params])
 
     # Compute strain_list as described, with improved NaN handling
     strain_list = []
     for i, row in enumerate(q_data):
         mask = ~np.isnan(row)
-        filtered_row = row[mask]
-        q_avg = np.mean(filtered_row) if np.any(mask) else np.nan
-        q0 = strain_params[i][0] if i < len(strain_params) and strain_params[i] is not None else np.nan
-        if q0 != 0 and not np.isnan(q0) and not np.isnan(q_avg):
+        q_avg = np.mean(row[mask]) if np.any(mask) else np.nan
+        q0 = strain_params[i].get('q0', np.nan)
+        if not np.isnan(q0) and q0 != 0 and not np.isnan(q_avg):
             strain = (q0 - q_avg) / q0
         else:
             strain = np.nan
         strain_list.append(strain)
 
     # Extract q0_list for all rings (already passed as argument, but keep for compatibility)
-    q0_list_out = [row[0] if row is not None and len(row) > 0 else np.nan for row in strain_params]
+    q0_list_out = [p.get('q0', np.nan) for p in strain_params]
 
     # Save the full strain vs chi array
     strain_vs_chi = (np.array(q0_list_out).reshape(-1, 1) - q_data) / np.array(q0_list_out).reshape(-1, 1)
@@ -584,7 +571,7 @@ def fit_lattice_cone_distortion(q_data, q0_list, wavelength_nm,
                header="Rows = diffraction rings; Columns = azimuthal bins (strain vs chi data)")
     logger.info(f"Strain vs chi centroid data saved to: {strain_vs_chi_path}")
 
-    return strain_array, strain_list, q0_list_out, strain_vs_chi_path
+    return strain_params, strain_list, q0_list_out, strain_vs_chi_path
 
 # --- Generate strain maps from JSON ---------------------------------
 # Generates the strain maps without the need to have a different function for contiguous and

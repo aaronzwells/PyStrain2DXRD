@@ -31,6 +31,7 @@ def batch_main_pipeline(input_dir="InputFiles/400C_AO_inputs", n_jobs=-1):
         try:
             file_logger.info(f"Starting pipeline for {tif_path}")
             poni_file     = "calibration/Calibration_LaB6_100x100_3s_r8_mod2.poni"
+            save_chi_files = False # this determines whether every q vs chi bin dataset is saved as a separate file or if the file writing is skipped
             tif_file      = tif_path
             mask_thresh   = 4e2
             num_azim_bins = 120
@@ -71,8 +72,9 @@ def batch_main_pipeline(input_dir="InputFiles/400C_AO_inputs", n_jobs=-1):
                 q_min=q_min_nm1,
                 npt_rad=npt_rad,
                 output_dir=chi_path,
+                save_chi_files=save_chi_files,
                 logger=file_logger)
-            q_vs_chi, q_chi_path = fl.fit_peaks_with_initial_guesses(
+            q_vs_chi, q_vs_chi_errors, q_chi_path = fl.fit_peaks_with_initial_guesses(
                 I2d,
                 q,
                 initial_q_guesses,
@@ -89,6 +91,7 @@ def batch_main_pipeline(input_dir="InputFiles/400C_AO_inputs", n_jobs=-1):
                 logger=file_logger)
             strain_tensor_components, strain_list, q0_list, strain_vs_chi_file = fl.fit_lattice_cone_distortion(
                 q_data=q_vs_chi,
+                q_errors=q_vs_chi_errors,
                 q0_list=initial_q_guesses,
                 wavelength_nm=wavelength_nm,
                 chi_deg=chi,
@@ -107,22 +110,13 @@ def batch_main_pipeline(input_dir="InputFiles/400C_AO_inputs", n_jobs=-1):
                 plot=True,
                 logger=file_logger)
             # Write strain tensor components to per-image JSON file
+            # Write strain tensor components AND ERRORS to per-image JSON file
             strain_tensor_path = os.path.join(output_path, "strain_tensor.json")
-            tensor_data = [
-                {
-                    "ring": i + 1,
-                    "eps_xx": row[0],
-                    "eps_xy": row[1],
-                    "eps_yy": row[2],
-                    "eps_xz": row[3],
-                    "eps_yz": row[4],
-                    "eps_zz": row[5]
-                }
-                for i, row in enumerate(strain_tensor_components.tolist())
-            ]
+            # The 'strain_params' is now a list of dictionaries, so we just save it directly
             with open(strain_tensor_path, 'w') as f:
-                json.dump(tensor_data, f, indent=2)
+                json.dump(strain_tensor_components, f, indent=2)
             file_logger.info(f"Successfully completed {tif_path}")
+
         except Exception as e:
             file_logger.error(f"Failed to process {tif_path}: {e}")
 
