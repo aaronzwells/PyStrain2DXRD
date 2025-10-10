@@ -236,6 +236,7 @@ def fit_peaks_with_initial_guesses(I2d, q, q_peaks, delta_tol=0.07, eta0=0.5, n_
 
     Returns:
         q_centroids (ndarray): Array of fitted centroid positions [num_peaks x num_azim_bins]
+        q_errors (ndarray): Array of fitted centroid errors [num_peaks x num_azim_bins]
     """
     from joblib import Parallel, delayed
     logger = logger or logging.getLogger(__name__)
@@ -244,53 +245,70 @@ def fit_peaks_with_initial_guesses(I2d, q, q_peaks, delta_tol=0.07, eta0=0.5, n_
     widths_q = np.full_like(q_peaks, dq * 3)  # reasonable initial width
     # print(delta_array)
     def _fit_slice_w_guesses(intensity_row):
-        out = []
+        centroids_out = []
+        errors_out = []
         for i, (q0, wid0) in enumerate(zip(q_peaks, widths_q)):
             if delta_array is not None:
-                tol_up = delta_array[0][i]
-                tol_dn = delta_array[1][i]
+                tol_up, tol_dn = delta_array[0][i], delta_array[1][i]
             else:
-                print("skipped delta_array")
                 tol_up = tol_dn = delta_tol
+
             mask = (q >= q0 - tol_dn) & (q <= q0 + tol_up)
-            x = q[mask]
-            y = intensity_row[mask]
+            x, y = q[mask], intensity_row[mask]
+            
             if len(x) < 5 or not np.any(y > 0):
-                out.append(np.nan)
+                centroids_out.append(np.nan)
+                errors_out.append(np.nan)
                 continue
 
             try:
                 p0 = [np.max(y), q0, wid0, eta0]
                 bounds = ([0, q0 - tol_dn, 0, 0], [np.inf, q0 + tol_up, np.inf, 1])
-                popt, _ = curve_fit(pseudo_voigt, x, y, p0=p0, bounds=bounds)
-                fitted_q = popt[1]
+                popt, pcov = curve_fit(pseudo_voigt, x, y, p0=p0, bounds=bounds)
                 
-                # Reject if too close to edge or outside
-                edge_buffer = 0  # small tolerance buffer (can be 0)
+                # Get standard errors from the covariance matrix
+                perr = np.sqrt(np.diag(pcov))
+                fitted_q = popt[1]
+                fitted_q_error = perr[1] # Error of the centroid parameter
+                
+                edge_buffer = 0
                 if not (q0 - tol_dn + edge_buffer <= fitted_q <= q0 + tol_up - edge_buffer):
-                    out.append(np.nan)
+                    centroids_out.append(np.nan)
+                    errors_out.append(np.nan)
                 else:
-                    out.append(fitted_q)
+                    centroids_out.append(fitted_q)
+                    errors_out.append(fitted_q_error)
+
             except Exception:
-                logger.exception(f"Fit failed for peak index {i} in azimuthal bin.")
-                out.append(np.nan)
-        return out
+                logger.debug(f"Fit failed for peak index {i} in azimuthal bin.")
+                centroids_out.append(np.nan)
+                errors_out.append(np.nan)
+        return centroids_out, errors_out
+
 
     results = Parallel(n_jobs=n_jobs)(
         delayed(_fit_slice_w_guesses)(row) for row in I2d
     )
-    arr = np.array(results).T
+    
+    q_centroids_list, q_errors_list = zip(*results)
+
+    q_centroids_arr = np.array(q_centroids_list).T
+    q_errors_arr = np.array(q_errors_list).T
 
     # Save q vs chi data to txt for future use
     if output_dir is not None:
-        output_path = f"{output_dir}/q_vs_chi_peaks.txt"
-        np.savetxt(output_path, arr, fmt="%.6f", delimiter="\t",
-                header="Rows = diffraction rings; Columns = azimuthal bins (q vs chi data)")
-        logger.info(f"q vs chi centroid data saved to: {output_path}")
+        q_chi_path = os.path.join(output_dir, "q_vs_chi_peaks.txt")
+        q_err_path = os.path.join(output_dir, "q_vs_chi_errors.txt")
+        
+        np.savetxt(q_chi_path, q_centroids_arr, fmt="%.6f", delimiter="\t", header="Rows = rings; Cols = azim bins (q centroids)")
+        np.savetxt(q_err_path, q_errors_arr, fmt="%.6f", delimiter="\t", header="Rows = rings; Cols = azim bins (q errors)")
+        
+        logger.info(f"q vs chi centroid data saved to: {q_chi_path}")
+        logger.info(f"q vs chi error data saved to: {q_err_path}")
     else:
-        logger.warning("No output directory provided!\nq vs χ data was not saved to a .txt!")
+        logger.warning("No output directory provided! q vs chi data was not saved!")
 
-    return arr, output_path
+    return q_centroids_arr, q_errors_arr, q_chi_path
 
 
 def plot_q_vs_chi_stacked(file_path, output_dir=None, chi_deg=None, dpi=600, plot=True, calibrant=False, logger=None):
