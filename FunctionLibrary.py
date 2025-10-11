@@ -848,6 +848,7 @@ def generate_strain_maps_from_json(
             avg_error_maps[name] = avg_error_map
             calculate_and_log_map_error_metrics(avg_map, avg_error_map, title, logger, file_handle=f)
 
+
         # Plot averaged maps
         for comp in components_to_process:
             name = comp['name']

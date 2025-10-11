@@ -9,6 +9,7 @@ def map_strain():
     sample_name = "VB-APS-SSAO-6_400C_test"
     solved_strain_components = 5 # 3 = biaxial; 5 = biaxial w/ shear; 6 = all components
     
+    
     # Define the geometric and measurement parameters for mapping
     n_steps_x = 4      # Number of measurement points in the X direction (columns)
     n_steps_y = 21     # Number of measurement points in the Y direction (rows)
