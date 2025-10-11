@@ -6,7 +6,8 @@ import time
 def map_strain():
     # --- User-Defined Inputs ---
     json_path = "OutputData/OutputFiles_Data_VB-APS-SSAO-6_400C_2025.10.10-15.00.43/strain_tensor_summary.json"
-    sample_name = "VB-APS-SSAO-6_400C_attempt"
+    sample_name = "VB-APS-SSAO-6_400C_test"
+    solved_strain_components = 5 # 3 = biaxial; 5 = biaxial w/ shear; 6 = all components
     
     # Define the geometric and measurement parameters for mapping
     n_steps_x = 4      # Number of measurement points in the X direction (columns)
@@ -48,7 +49,8 @@ def map_strain():
         colorbar_scale=colorbar_scale,
         output_dir=output_directory,
         dpi=600,
-        map_name_pfx=map_name_pfx)
+        map_name_pfx=map_name_pfx,
+        num_strain_components=solved_strain_components)
 
 if __name__ == "__main__":
     map_strain()

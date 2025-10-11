@@ -573,6 +573,42 @@ def fit_lattice_cone_distortion(q_data, q_errors, q0_list, wavelength_nm,
 
     return strain_params, strain_list, q0_list_out, strain_vs_chi_path
 
+# In FunctionLibrary.py, add this new function
+
+def calculate_and_log_map_error_metrics(data_map, error_map, map_name, logger, file_handle=None):
+    """
+    Calculates error metrics, logs them to the console, and optionally writes them to a file.
+    """
+    import numpy as np
+
+    valid_errors = error_map[~np.isnan(error_map)]
+    valid_data = data_map[~np.isnan(data_map)]
+
+    if valid_errors.size == 0:
+        logger.warning(f"No valid data to calculate error metrics for {map_name}.")
+        return
+
+    avg_error = np.mean(valid_errors)
+    rms_error = np.sqrt(np.mean(valid_errors**2))
+    std_dev_of_values = np.std(valid_data)
+
+    # --- Create the output string ---
+    header = f"--- Error Metrics for: {map_name} ---"
+    metrics_str = (
+        f"{header}\n"
+        f"    Average Measurement Error: {avg_error:.3e}\n"
+        f"    RMS of Measurement Error:  {rms_error:.3e}\n"
+        f"    Standard Deviation of Map Values (Spatial Variation): {std_dev_of_values:.3e}\n"
+        f"{'-' * len(header)}\n"
+    )
+
+    # Log to console/main log file
+    logger.info(metrics_str)
+
+    # --- Write to the summary text file if a handle is provided ---
+    if file_handle:
+        file_handle.write(metrics_str + "\n")
+
 # --- Generate strain maps from JSON ---------------------------------
 # Generates the strain maps without the need to have a different function for contiguous and
 # non-contiguous scan layouts
@@ -592,27 +628,27 @@ def generate_strain_maps_from_json(
     dpi=600,
     map_name_pfx="strain-map_",
     logger=None,
+    num_strain_components=3  # === ADD THIS PARAMETER WITH A DEFAULT VALUE ===
 ):
     """
-    Generates physically accurate strain maps by drawing individual rectangles for each data point.
-    Includes options for coordinate shifting and trimming negative axes.
+    Generates physically accurate strain maps for a specified number of tensor components
+    and saves a summary of error metrics to a text file.
     """
-    import os
-    import numpy as np
-    import json
-    import matplotlib.pyplot as plt
-    import matplotlib.patches as patches
-    import matplotlib.colors as mcolors
+    # ... (imports and initial data loading are the same) ...
+    import os, numpy as np, json, time
+    import matplotlib.pyplot as plt, matplotlib.patches as patches, matplotlib.colors as mcolors
     from matplotlib.ticker import FuncFormatter
     from matplotlib.cm import ScalarMappable
     from joblib import Parallel, delayed
-
+    
     logger = logger or logging.getLogger(__name__)
+    
     os.makedirs(output_dir, exist_ok=True)
-
+    
     with open(json_path, 'r') as f:
         strain_data = json.load(f)
 
+    # Data validation
     num_points = len(strain_data)
     if num_points != n_rows * n_cols:
         raise ValueError(f"Grid dimension mismatch! JSON data points ({num_points}) do not match grid ({n_rows}x{n_cols}).")
@@ -621,23 +657,49 @@ def generate_strain_maps_from_json(
     num_rings = len(strain_data[0].get("strain_tensor", []))
     if gap_mm is None: gap_mm = 0.0
 
-    filtered = [[] for _ in range(num_rings)]
-    # (This data filtering loop is unchanged)
+    # Extracting both values and errors
+    value_keys = ['eps_xx', 'eps_xy', 'eps_yy', 'eps_xz', 'eps_yz', 'eps_zz']
+    error_keys = [f'{key}_err' for key in value_keys]
+
+    filtered_values = [[] for _ in range(num_rings)]
+    filtered_errors = [[] for _ in range(num_rings)]
+
+
     for entry in strain_data:
         tensors = entry.get("strain_tensor", [])
         for i in range(num_rings):
             if i < len(tensors) and isinstance(tensors[i], dict):
-                filtered[i].append([
-                    tensors[i].get("eps_xx", np.nan), tensors[i].get("eps_xy", np.nan),
-                    tensors[i].get("eps_yy", np.nan), tensors[i].get("eps_xz", np.nan),
-                    tensors[i].get("eps_yz", np.nan), tensors[i].get("eps_zz", np.nan)
-                ])
+                filtered_values[i].append([tensors[i].get(k, np.nan) for k in value_keys])
+                filtered_errors[i].append([tensors[i].get(k, np.nan) for k in error_keys])
             else:
-                filtered[i].append([np.nan] * 6)
+                filtered_values[i].append([np.nan] * 6)
+                filtered_errors[i].append([np.nan] * 6)
 
-    pixel_size_unit = "mm"
+    # Select components to plot based on the input parameter
+    if num_strain_components == 6:
+        components_to_plot = ['xx', 'xy', 'yy', 'xz', 'yz', 'zz']
+    elif num_strain_components == 5:
+        components_to_plot = ['xx', 'xy', 'yy', 'xz', 'yz']
+    else:  # Default to 3 components (biaxial)
+        components_to_plot = ['xx', 'xy', 'yy']
+        if num_strain_components != 3:
+            logger.warning(f"Invalid num_strain_components ({num_strain_components}). Defaulting to 3.")
     
-    # --- Apply the coordinate offset ---
+    # Master list of all possible components
+    all_components = [
+        {'name': 'xx', 'index': 0, 'title': 'Strain_xx', 'latex': r'$\varepsilon_{xx}$'},
+        {'name': 'xy', 'index': 1, 'title': 'Strain_xy', 'latex': r'$\varepsilon_{xy}$'},
+        {'name': 'yy', 'index': 2, 'title': 'Strain_yy', 'latex': r'$\varepsilon_{yy}$'},
+        {'name': 'xz', 'index': 3, 'title': 'Strain_xz', 'latex': r'$\varepsilon_{xz}$'},
+        {'name': 'yz', 'index': 4, 'title': 'Strain_yz', 'latex': r'$\varepsilon_{yz}$'},
+        {'name': 'zz', 'index': 5, 'title': 'Strain_zz', 'latex': r'$\varepsilon_{zz}$'}
+    ]
+
+    # Filter the master list to get only the components we need to process
+    components_to_process = [c for c in all_components if c['name'] in components_to_plot]
+
+    # Map geometry definitions
+    pixel_size_unit = "mm"
     startX, startY = start_xy
     shiftX, shiftY = map_offset_xy
     startX += shiftX
@@ -715,44 +777,136 @@ def generate_strain_maps_from_json(
         plt.close()
         logger.info(f"{title} heatmap saved to: {filepath}")
 
-    def _plot_one_ring(ring_index, ring_data):
-        strain_array = np.array(ring_data).reshape((n_rows, n_cols, 6))
+    def _plot_one_ring(ring_index, value_data, error_data):
+        strain_array = np.array(value_data).reshape((n_rows, n_cols, 6))
         
-        eps_xx = strain_array[:, :, 0]
-        eps_xy = strain_array[:, :, 1]
-        eps_yy = strain_array[:, :, 2]
-        eps_xz = strain_array[:, :, 3]
-        eps_yz = strain_array[:, :, 4]
-        eps_zz = strain_array[:, :, 5]
-        vm_base = np.sqrt(((eps_xx-eps_yy)**2 + (eps_yy-eps_zz)**2 + (eps_zz-eps_xx)**2)/2 + 3*(eps_xy**2 + eps_xz**2 + eps_yz**2))
+        for comp in components_to_process:
+            name, index, title_latex = comp['name'], comp['index'], comp['latex']
+            data_map = strain_array[:, :, index]
+            title = f"{title_latex} (Ring {ring_index + 1})"
+            filename = f"{map_name_pfx}_{name}_ring{ring_index + 1}.png"
+            plot_and_save(data_map, title, filename)
+        
+        # --- Calculating and plotting von Mises ---
+        # Default to 0.0 is that strain component was not solved for -- prevents errors in calculation
+        eps_xx = strain_array[:,:,0] if 'xx' in components_to_plot else 0.0
+        eps_xy = strain_array[:,:,1] if 'xy' in components_to_plot else 0.0
+        eps_yy = strain_array[:,:,2] if 'yy' in components_to_plot else 0.0
+        eps_xz = strain_array[:,:,3] if 'xz' in components_to_plot else 0.0
+        eps_yz = strain_array[:,:,4] if 'yz' in components_to_plot else 0.0
+        eps_zz = strain_array[:,:,5] if 'zz' in components_to_plot else 0.0
+        
+        vm_strain = np.sqrt(((eps_xx - eps_yy)**2 + (eps_yy - eps_zz)**2 + (eps_zz - eps_xx)**2) / 2 + 3 * (eps_xy**2 + eps_xz**2 + eps_yz**2))
+        title_vm = f"$\\varepsilon_{{VM}}$ (Ring {ring_index + 1})"
+        filename_vm = f"{map_name_pfx}_Mises_ring{ring_index + 1}.png"
+        plot_and_save(vm_strain, title_vm, filename_vm)
 
-        ring_suffix = f"_ring{ring_index+1}"
-        plot_and_save(eps_xx, r'$\varepsilon_{xx}$', f"{map_name_pfx}_xx{ring_suffix}.png")
-        plot_and_save(eps_xy, r'$\varepsilon_{xy}$', f"{map_name_pfx}_xy{ring_suffix}.png")
-        plot_and_save(eps_yy, r'$\varepsilon_{yy}$', f"{map_name_pfx}_yy{ring_suffix}.png")
-        plot_and_save(eps_xz, r'$\varepsilon_{xz}$', f"{map_name_pfx}_xz{ring_suffix}.png")
-        plot_and_save(eps_yz, r'$\varepsilon_{yz}$', f"{map_name_pfx}_yz{ring_suffix}.png")
-        plot_and_save(eps_zz, r'$\varepsilon_{zz}$', f"{map_name_pfx}_zz{ring_suffix}.png")
-        plot_and_save(vm_base, r'$\varepsilon_{VM}$', f"{map_name_pfx}_Mises{ring_suffix}.png")
+    Parallel(n_jobs=-1)(delayed(_plot_one_ring)(i, filtered_values[i], filtered_errors[i]) for i in range(num_rings))
 
-    Parallel(n_jobs=-1)(delayed(_plot_one_ring)(i, filtered[i]) for i in range(num_rings))
+    # Generate and save the error metrics summary file
+    summary_filepath = os.path.join(output_dir, "error_metrics_summary.txt")
+    with open(summary_filepath, 'w') as f:
+        # file header
+        f.write(f"Error Metrics Summary for: {map_name_pfx}\n")
+        f.write(f"Generated on: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+        f.write("="*50 + "\n\n")
 
-    # Averaged maps
-    avg_eps_xx = np.nanmean([np.array(r)[:,0].reshape(n_rows,n_cols) for r in filtered], axis=0)
-    avg_eps_xy = np.nanmean([np.array(r)[:,1].reshape(n_rows,n_cols) for r in filtered], axis=0)
-    avg_eps_yy = np.nanmean([np.array(r)[:,2].reshape(n_rows,n_cols) for r in filtered], axis=0)
-    avg_eps_xz = np.nanmean([np.array(r)[:,3].reshape(n_rows,n_cols) for r in filtered], axis=0)
-    avg_eps_yz = np.nanmean([np.array(r)[:,4].reshape(n_rows,n_cols) for r in filtered], axis=0)
-    avg_eps_zz = np.nanmean([np.array(r)[:,5].reshape(n_rows,n_cols) for r in filtered], axis=0)
-    avg_eps_vm = np.sqrt(((avg_eps_xx-avg_eps_yy)**2 + (avg_eps_yy-avg_eps_zz)**2 + (avg_eps_zz-avg_eps_xx)**2)/2 + 3*(avg_eps_xy**2+avg_eps_xz**2+avg_eps_yz**2))
+        # Per-ring metrics
+        f.write("--- Metrics for Each Ring ---\n\n")
+        for i in range(num_rings):
+            # data reshaping
+            strain_array = np.array(filtered_values[i]).reshape((n_rows, n_cols, 6))
+            error_array = np.array(filtered_errors[i]).reshape((n_rows, n_cols, 6))
 
-    plot_and_save(avg_eps_xx, r'$\varepsilon_{xx}$ (Avg)', f"{map_name_pfx}_xx_avg.png")
-    plot_and_save(avg_eps_xy, r'$\varepsilon_{xy}$ (Avg)', f"{map_name_pfx}_xy_avg.png")
-    plot_and_save(avg_eps_yy, r'$\varepsilon_{yy}$ (Avg)', f"{map_name_pfx}_yy_avg.png")
-    plot_and_save(avg_eps_xz, r'$\varepsilon_{xz}$ (Avg)', f"{map_name_pfx}_xz_avg.png")
-    plot_and_save(avg_eps_yz, r'$\varepsilon_{yz}$ (Avg)', f"{map_name_pfx}_yz_avg.png")
-    plot_and_save(avg_eps_zz, r'$\varepsilon_{zz}$ (Avg)', f"{map_name_pfx}_zz_avg.png")
-    plot_and_save(avg_eps_vm, r'$\varepsilon_{VM}$ (Avg)', f"{map_name_pfx}_Mises_avg.png")
+            for comp in components_to_process:
+                data_map = strain_array[:, :, comp['index']]
+                error_map = error_array[:, :, comp['index']]
+                map_name = f"{comp['title']} Ring {i+1}"
+                calculate_and_log_map_error_metrics(data_map, error_map, map_name, logger, file_handle=f)
+            
+            
+            # von Mises for each ring
+            eps_xx, eps_yy, eps_zz, eps_xy = strain_array[:,:,0], strain_array[:,:,2], strain_array[:,:,5], strain_array[:,:,1]
+            err_xx, err_yy, err_zz, err_xy = error_array[:,:,0], error_array[:,:,2], error_array[:,:,5], error_array[:,:,1]
+            vm_strain = np.sqrt(((eps_xx - eps_yy)**2 + (eps_yy - eps_zz)**2 + (eps_zz - eps_xx)**2) / 2 + 3 * (eps_xy**2))
+            err_vm = np.sqrt(err_xx**2 + err_yy**2 + err_zz**2 + err_xy**2)
+            calculate_and_log_map_error_metrics(vm_strain, err_vm, f"Strain_VM Ring {i+1}", logger, file_handle=f)
+
+        f.write("\n--- Metrics for Averaged Maps ---\n\n")
+
+        # --- Metrics for Averaged Maps ---
+        f.write("\n--- Metrics for Averaged Maps ---\n\n")
+        avg_maps = {}
+        avg_error_maps = {}
+        for comp in components_to_process:
+            # (Calculation logic is the same)
+            name, index, title = comp['name'], comp['index'], comp['title']
+            avg_map = np.nanmean([np.array(r)[:, index].reshape(n_rows, n_cols) for r in filtered_values], axis=0)
+            avg_maps[name] = avg_map
+            error_maps = [np.array(r)[:, index].reshape(n_rows, n_cols) for r in filtered_errors]
+            avg_error_map = np.sqrt(np.nanmean(np.square(error_maps), axis=0))
+            avg_error_maps[name] = avg_error_map
+            calculate_and_log_map_error_metrics(avg_map, avg_error_map, title, logger, file_handle=f)
+
+        # Plot averaged maps
+        for comp in components_to_process:
+            name = comp['name']
+            latex_title = comp['latex']
+            filename = f"{map_name_pfx}_{name}_avg.png"
+            plot_and_save(avg_maps[name], f"{latex_title} (Avg)", filename)
+        
+        # --- Plot the averaged von Mises strain ---
+        vm_title = 'Strain_VM (Avg)'
+        vm_title_latex = r'$\varepsilon_{VM}$ (Avg)'
+        
+        s_xx = avg_maps.get('xx', np.nan)
+        s_xy = avg_maps.get('xy', np.nan)
+        s_yy = avg_maps.get('yy', np.nan)
+        s_xz = avg_maps.get('xz', 0.0)
+        s_yz = avg_maps.get('yz', 0.0)
+        s_zz = avg_maps.get('zz', 0.0) # Defaults to 0.0 if 'zz' key is not found
+
+        avg_vm_strain = np.sqrt(0.5 * ((s_xx-s_yy)**2 + (s_yy-s_zz)**2 + (s_zz-s_xx)**2) + 3*(s_xy**2 + s_xz**2 + s_yz**2))
+
+        err_xx = avg_error_maps.get('xx', np.nan)
+        err_xy = avg_error_maps.get('xy', np.nan)
+        err_yy = avg_error_maps.get('yy', np.nan)
+        err_xz = avg_error_maps.get('xz', 0.0)
+        err_yz = avg_error_maps.get('yz', 0.0)
+        err_zz = avg_error_maps.get('zz', 0.0) # Defaults to 0.0 if 'zz' key is not found
+        
+        avg_vm_error = np.sqrt(err_xx**2 + err_yy**2 + err_zz**2 + err_xy**2 + err_xz**2 + err_yz**2)
+
+        calculate_and_log_map_error_metrics(avg_vm_strain, avg_vm_error, vm_title, logger, file_handle=f)
+        plot_and_save(avg_vm_strain, vm_title_latex, f"{map_name_pfx}_Mises_avg.png")
+
+
+    logger.info("Averaged maps plotted and error summary file saved.")
+
+    # # OUTDATED: Averaged maps -- hard coded
+    # avg_eps_xx = np.nanmean([np.array(r)[:,0].reshape(n_rows,n_cols) for r in filtered_values], axis=0)
+    # avg_eps_xy = np.nanmean([np.array(r)[:,1].reshape(n_rows,n_cols) for r in filtered_values], axis=0)
+    # avg_eps_yy = np.nanmean([np.array(r)[:,2].reshape(n_rows,n_cols) for r in filtered_values], axis=0)
+    # avg_eps_xz = np.nanmean([np.array(r)[:,3].reshape(n_rows,n_cols) for r in filtered_values], axis=0)
+    # avg_eps_yz = np.nanmean([np.array(r)[:,4].reshape(n_rows,n_cols) for r in filtered_values], axis=0)
+    # avg_eps_zz = np.nanmean([np.array(r)[:,5].reshape(n_rows,n_cols) for r in filtered_values], axis=0)
+    # avg_eps_vm = np.sqrt(((avg_eps_xx-avg_eps_yy)**2 + (avg_eps_yy-avg_eps_zz)**2 + (avg_eps_zz-avg_eps_xx)**2)/2 + 3*(avg_eps_xy**2+avg_eps_xz**2+avg_eps_yz**2))
+
+    # avg_err_xx = np.sqrt(np.nanmean(np.square([np.array(r)[:,0].reshape(n_rows,n_cols) for r in filtered_errors]), axis=0))
+    # avg_err_xy = np.sqrt(np.nanmean(np.square([np.array(r)[:,1].reshape(n_rows,n_cols) for r in filtered_errors]), axis=0))
+    # avg_err_yy = np.sqrt(np.nanmean(np.square([np.array(r)[:,2].reshape(n_rows,n_cols) for r in filtered_errors]), axis=0))
+    # avg_err_xz = np.sqrt(np.nanmean(np.square([np.array(r)[:,3].reshape(n_rows,n_cols) for r in filtered_errors]), axis=0))
+    # avg_err_yz = np.sqrt(np.nanmean(np.square([np.array(r)[:,4].reshape(n_rows,n_cols) for r in filtered_errors]), axis=0))
+    # avg_err_zz = np.sqrt(np.nanmean(np.square([np.array(r)[:,5].reshape(n_rows,n_cols) for r in filtered_errors]), axis=0))
+    # avg_err_vm = np.sqrt(np.nanmean(np.square([np.array(r)[:,6].reshape(n_rows,n_cols) for r in filtered_errors]), axis=0))
+
+    # plot_and_save(avg_eps_xx, r'$\varepsilon_{xx}$ (Avg)', f"{map_name_pfx}_xx_avg.png")
+    # plot_and_save(avg_eps_xy, r'$\varepsilon_{xy}$ (Avg)', f"{map_name_pfx}_xy_avg.png")
+    # plot_and_save(avg_eps_yy, r'$\varepsilon_{yy}$ (Avg)', f"{map_name_pfx}_yy_avg.png")
+    # plot_and_save(avg_eps_xz, r'$\varepsilon_{xz}$ (Avg)', f"{map_name_pfx}_xz_avg.png")
+    # plot_and_save(avg_eps_yz, r'$\varepsilon_{yz}$ (Avg)', f"{map_name_pfx}_yz_avg.png")
+    # plot_and_save(avg_eps_zz, r'$\varepsilon_{zz}$ (Avg)', f"{map_name_pfx}_zz_avg.png")
+    # plot_and_save(avg_eps_vm, r'$\varepsilon_{VM}$ (Avg)', f"{map_name_pfx}_Mises_avg.png")
 
 # --- Utility: Reconstruct simulated diffraction rings using fitted strain tensor components ---
 def reconstruct_rings_from_json(json_path, wavelength_nm, chi_step=1.0, logger=None, plot=True, output_dir=None):
