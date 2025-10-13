@@ -5,8 +5,9 @@ import time
 
 def map_strain():
     # --- User-Defined Inputs ---
-    json_path = "OutputData/OutputFiles_Data_VB-APS-SSAO-6_30C_cool_2025.10.03-20.43.25/strain_tensor_summary.json"
-    sample_name = "VB-APS-SSAO-6_30C_cool"
+    json_path = "OutputData/OutputFiles_Data_VB-APS-SSAO-6_200C_2025.10.13-12.23.58/strain_tensor_summary.json"
+    sample_name = "VB-APS-SSAO-6_200C"
+    solved_strain_components = 5 # 3 = biaxial; 5 = biaxial w/ shear; 6 = all components
     
     # Define the geometric and measurement parameters for mapping
     n_steps_x = 4      # Number of measurement points in the X direction (columns)
@@ -17,7 +18,7 @@ def map_strain():
     start_xy = (0.0, 1.0) # Physical starting coordinate (center of the top-left pixel); (startX, startY) in mm
     gap_mm = None # If an additional gap is added between scanned columns, define it here. Usually this is "None"
     map_offset_xy = (-0.05, -start_xy[1]+pixel_size_map[1]/2) # vector for shifting the map data
-    trim_edges = True # allows the user to trim the pixels left and down from the translated (0,0)
+    trim_edges = False # allows the user to trim the pixels left and down from the translated (0,0)
     color_limit_window = (0.2, 0.8) # Sets the x-range (in mm) used to determine the color scale limits
     colorbar_scale = (-3.5e-04, 4e-04) # Sets the scale of strain; if uniform scale not desired: None
 
@@ -48,7 +49,8 @@ def map_strain():
         colorbar_scale=colorbar_scale,
         output_dir=output_directory,
         dpi=600,
-        map_name_pfx=map_name_pfx)
+        map_name_pfx=map_name_pfx,
+        num_strain_components=solved_strain_components)
 
 if __name__ == "__main__":
     map_strain()
