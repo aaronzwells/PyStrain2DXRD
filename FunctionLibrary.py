@@ -196,8 +196,9 @@ def integrate_2d(ai, data, mask, num_azim_bins=360, q_min=16.0, npt_rad=5000, ou
         q: radial q values
         chi: azimuthal chi values (degrees)
     """
-    import os
-    os.makedirs(output_dir, exist_ok=True)
+    if save_chi_files:
+        import os
+        os.makedirs(output_dir, exist_ok=True)
 
     logger = logger or logging.getLogger(__name__)
     logger.info("Running the integrate_2d() function")
@@ -228,7 +229,7 @@ def integrate_2d(ai, data, mask, num_azim_bins=360, q_min=16.0, npt_rad=5000, ou
     I2d = I2d[order]
 
     # Save each azimuthal bin's pattern as a .chi file
-    if save_chi_files==True:
+    if save_chi_files:
         for i, chi_val in enumerate(chi):
             chi_deg = chi_val  # * (num_azim_bins/360)
             filename = os.path.join(output_dir, f"azim_{int(round(chi_deg))}deg.chi")
@@ -237,9 +238,9 @@ def integrate_2d(ai, data, mask, num_azim_bins=360, q_min=16.0, npt_rad=5000, ou
                 f.write("# Columns: q (nm^-1), Intensity (a.u.)\n")
                 for q_val, I_val in zip(q, I2d[i]):
                     f.write(f"{q_val:.6f} {I_val:.6f}\n")
+        fig_filename = os.path.join(output_dir, "q_vs_chi_plot.png")
+        logger.info(f"Stacked q vs chi plot saved to: {fig_filename}")
 
-    fig_filename = os.path.join(output_dir, "q_vs_chi_plot.png")
-    logger.info(f"Stacked q vs chi plot saved to: {fig_filename}")
     return I2d, q, chi
 
 def fit_peaks_with_initial_guesses(I2d, q, q_peaks, delta_tol=0.07, eta0=0.5, n_jobs=-1, delta_array=None, output_dir=None, logger=None):

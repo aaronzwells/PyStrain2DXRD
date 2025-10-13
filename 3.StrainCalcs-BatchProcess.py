@@ -76,8 +76,12 @@ def batch_main_pipeline(config):
                 mask_threshold=mask_thresh,
                 logger=file_logger
             )
-            chi_path = fl.create_directory(f"{output_path}/ChiOutput", logger=file_logger) # output file directory creation for chi files
             
+            if save_chi_files:
+                chi_path = fl.create_directory(f"{output_path}/ChiOutput", logger=file_logger) # output file directory creation for chi files
+            else:
+                chi_path = None
+
             # --- MAIN AZIMUTHAL INTEGRATION FUNCTION ----------------------------------
             I2d, q, chi = fl.integrate_2d( 
                 ai, data, mask,
