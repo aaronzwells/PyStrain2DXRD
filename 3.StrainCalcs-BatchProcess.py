@@ -1,12 +1,6 @@
 import os
-# os.environ['OMP_NUM_THREADS'] = '1'
-# os.environ['MKL_NUM_THREADS'] = '1'
-# os.environ['OPENBLAS_NUM_THREADS'] = '1'
-# os.environ['VECLIB_MAXIMUM_THREADS'] = '1'
-# os.environ['NUMEXPR_NUM_THREADS'] = '1'
-
-# import matplotlib
-# matplotlib.use('Agg') # Uses the Agg backend for matplotlib to prevent UI generation, which speeds up the image saving and prevents issues with threaded parallelizing
+import matplotlib
+matplotlib.use('Agg') # Uses the Agg backend for matplotlib to prevent UI generation, which speeds up the image saving and prevents issues with threaded parallelizing
 import logging
 import time
 import numpy as np
@@ -22,11 +16,14 @@ def batch_main_pipeline(config):
     n_jobs = config['num_jobs_parallel']
     sampleName = config['sampleName']
     input_dir = config['input_dir']
+    
+    # Setting up the time metrics and creating the parent output directory
     start_time = time.time()
     batch_time_suffix = time.strftime('%Y.%m.%d-%H.%M.%S', time.localtime(start_time))
     batch_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(start_time))
     output_directory = fl.create_directory(f"OutputData/OutputFiles_Data_{sampleName}_{batch_time_suffix}", logger=None)
 
+    # Initialize the batch logger
     log_file_path = os.path.join(output_directory, "BatchProcess.log")
     logger = setup_logger(log_file_path, logger_name="Batch")
 
@@ -45,10 +42,12 @@ def batch_main_pipeline(config):
     logger.info(f"Found {len(tif_paths)} .tif files in {input_dir}")
 
     def run_pipeline_for_file(tif_path, config, output_directory, ai):
+        # Initializing the per-image log files
         filename = os.path.splitext(os.path.basename(tif_path))[0]
         log_path = os.path.join(output_directory, f"{filename}_pipeline.log")
         file_logger = setup_logger(log_path, logger_name=filename)
         try:
+            # Initialization of user-defined variables
             poni_file = config['poni_file']
             save_chi_files = config['save_chi_files']
             plot_q_vs_chi = config['plot_q_vs_chi']
@@ -66,23 +65,21 @@ def batch_main_pipeline(config):
             eta0 = config['eta0']
             min_rsquared = config['min_rsquared']
 
+            # Creation of the output directory
             filename_noext = fl.remove_filename_extension(tif_file)
             outputPath = os.path.join(output_directory, filename_noext)
             output_path = fl.create_directory(outputPath, logger=file_logger)
-            # ai, data, mask = fl.load_integrator_and_data(
-            #     poni_file,
-            #     tif_file,
-            #     output_path=output_path,
-            #     mask_threshold=mask_thresh,
-            #     logger=file_logger)
-            data, mask = fl.load_and_prep_image(
+
+            data, mask = fl.load_and_prep_image( # loads and masks the TIFF for analysis
                 tif_file,
                 output_path=output_path,
                 mask_threshold=mask_thresh,
                 logger=file_logger
             )
-            chi_path = fl.create_directory(f"{output_path}/ChiOutput", logger=file_logger)
-            I2d, q, chi = fl.integrate_2d(
+            chi_path = fl.create_directory(f"{output_path}/ChiOutput", logger=file_logger) # output file directory creation for chi files
+            
+            # --- MAIN AZIMUTHAL INTEGRATION FUNCTION ----------------------------------
+            I2d, q, chi = fl.integrate_2d( 
                 ai, data, mask,
                 num_azim_bins=num_azim_bins,
                 q_min=q_min_nm1,
@@ -90,6 +87,8 @@ def batch_main_pipeline(config):
                 output_dir=chi_path,
                 save_chi_files=save_chi_files,
                 logger=file_logger)
+            
+            # --- MAIN PEAK FITTING FUNCTION --------------------------------------------
             q_vs_chi, q_vs_chi_errors, q_chi_path = fl.fit_peaks_with_initial_guesses(
                 I2d,
                 q,
@@ -100,13 +99,15 @@ def batch_main_pipeline(config):
                 output_dir=output_path,
                 logger=file_logger,
                 n_jobs=1)
-            if plot_q_vs_chi:
+            if plot_q_vs_chi: # calling the q vs chi plotting function
                 fl.plot_q_vs_chi_stacked(
                     file_path=q_chi_path,
                     output_dir=output_path,
                     dpi=600,
                     plot=True,
                     logger=file_logger)
+                
+            # --- MAIN LATTICE DISTORTION AND STRAIN CALCULATION FUNCTION -----------------
             strain_tensor_components, strain_list, q0_list, strain_vs_chi_file = fl.fit_lattice_cone_distortion(
                 q_data=q_vs_chi,
                 q_errors=q_vs_chi_errors,
@@ -122,7 +123,7 @@ def batch_main_pipeline(config):
                 plot=True,
                 logger=file_logger,
                 min_rsquared=min_rsquared)
-            if plot_strain_vs_chi:
+            if plot_strain_vs_chi: # calling the unfitted strain vs chi plotting function
                 fl.plot_strain_vs_chi_stacked(
                     file_path=strain_vs_chi_file,
                     output_dir=output_path,
@@ -136,9 +137,10 @@ def batch_main_pipeline(config):
                 json.dump(strain_tensor_components, f, indent=2)
             file_logger.info(f"Successfully completed {tif_path}")
 
-        except Exception as e:
+        except Exception as e: # error handling
             file_logger.error(f"Failed to process {tif_path}: {e}")
 
+    # --- Runs the batch processing script in parallel ---
     Parallel(n_jobs=n_jobs)(
         delayed(run_pipeline_for_file)(tif_path, config, output_directory, ai) for tif_path in tif_paths
     )
@@ -190,24 +192,23 @@ def setup_logger(log_path, logger_name=None):
     return logger
 
 if __name__ == "__main__":
-    multiprocessing.set_start_method('spawn')
-    # --- Main analysis configuration dictionary ---
-    config = {
-        'input_dir': "InputFiles/200C_cool_AO_inputs",
-        'sampleName': "VB-APS-SSAO-6_200C_cool",
-        'poni_file': "calibration/Calibration_LaB6_100x100_3s_r8_mod2.poni",
-        'save_chi_files': False,
-        'plot_q_vs_chi': False,
-        'plot_strain_vs_chi': False,
+    multiprocessing.set_start_method('spawn') # spawn just defines a type of parallel processing
+    config = { # --- main analysis configuration dictionary ---
+        'input_dir': "InputFiles/200C_cool_AO_inputs", # directory housing the input images
+        'sampleName': "VB-APS-SSAO-6_200C_cool", # name used to create output data files
+        'poni_file': "calibration/Calibration_LaB6_100x100_3s_r8_mod2.poni", # calibration file path
+        'save_chi_files': False, # toggles saving the azimuthal q data for each bin
+        'plot_q_vs_chi': False, # toggles plotting q vs chi plots
+        'plot_strain_vs_chi': False, # toggles plotting unfitted strain vs chi plots
         'num_jobs_parallel': -2, # Uses all cores except for 1 to perform parallel calculations (-1 indicates using the maximum number of cores)
-        'mask_thresh': 4e2,
-        'num_azim_bins': 120,
-        'q_min_nm1': 14.0,
-        'npt_rad': 3000,
-        'delta_tol': 0.1,
-        'wavelength_nm': 0.1729786687, # [nm]
+        'mask_thresh': 4e2, # mask threshold for pixels; not used unless chosen; can be left at 4e2
+        'num_azim_bins': 120, # number of azimuthal bins for averaging the peaks
+        'q_min_nm1': 14.0, # minimum q value for radial integration
+        'npt_rad': 3000, # number of radial points from which to calculate peak centroids; ~2-3x radial pixel count
+        'delta_tol': 0.1, # A tolerance value for finding peak centroids if tol_array is not filled in
+        'wavelength_nm': 0.1729786687, # X-ray wavelength [nm]
         'solved_strain_components': 5, # 3=biaxial, 5=biaxial+shear, 6=full
-        'initial_q_guesses': [
+        'initial_q_guesses': [ # Initial q-values retrieved from 1.FindingRefPeaks.py for the particular dataset in question
             17.937944,
             24.470245,
             26.239514,
@@ -217,12 +218,12 @@ if __name__ == "__main__":
             44.459118,
             45.461021
         ],
-        'tol_array': [ 
-            [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
-            [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
+        'tol_array': [ # The tolerance in q [nm^-1] for finding the peak centroids
+            [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1], # looking up in q (larger values)
+            [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1] # looking down in q (smaller values)
         ],
-        'eta0': 0.5,
-        'min_rsquared': 0
+        'eta0': 0.5, # eta which is used for the Pseudo-Voigt; 0.5 works nicely
+        'min_rsquared': 0 # set to 0 to not filter by R-squared
     }
     
-    batch_main_pipeline(config)
+    batch_main_pipeline(config) # calling the batch process
