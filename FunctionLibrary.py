@@ -1,5 +1,4 @@
 import numpy as np
-import matplotlib.pyplot as plt
 from scipy.signal import find_peaks, peak_widths
 from scipy.optimize import curve_fit
 from numba import njit
@@ -9,7 +8,6 @@ import imageio.v2 as imageio
 import pyFAI, fabio
 import logging
 import json
-import statsmodels.api as sm
 
 
 # --- Utility: Removes the extension from a file name
@@ -156,6 +154,28 @@ def load_integrator_and_data(poni_path, tif_path, output_path, ref_tif_path=None
 
     # No mask computation; return None for mask
     return ai, data_adj, None
+
+def load_and_prep_image(tif_path, output_path, mask_threshold=4e2, logger=None):
+    """
+    Loads and preps a single TIFF image without reloading the integrator.
+    This is the faster version for batch processing.
+    """
+    logger = logger or logging.getLogger(__name__)
+
+    # Load and process the image data
+    img = fabio.open(tif_path)
+    data = img.data.astype(np.float32)
+    data_adj = imagej_autocontrast(data, k=3.0)
+
+    # Save the adjusted image
+    base, ext = os.path.splitext(tif_path)
+    filename = os.path.basename(base)
+    adjusted_path = f"{output_path}/{filename}_adjusted{ext}"
+    imageio.imwrite(adjusted_path, data_adj)
+    logger.info(f"Adjusted image saved to: {adjusted_path}")
+
+    # The mask is currently not used, so return None
+    return data_adj, None
 
 def integrate_2d(ai, data, mask, num_azim_bins=360, q_min=16.0, npt_rad=5000, output_dir=None, save_chi_files=False, logger=None):
     """
@@ -363,6 +383,7 @@ def plot_strain_vs_chi_stacked(file_path, output_dir=None, chi_deg=None, dpi=600
         dpi (int): Resolution of the saved figure.
     """
     import os
+    import matplotlib.pyplot as plt
     logger = logger or logging.getLogger(__name__)
     strain_data = np.loadtxt(file_path, comments='#', delimiter='\t')
     num_rings, num_chi = strain_data.shape
@@ -391,7 +412,7 @@ def plot_strain_vs_chi_stacked(file_path, output_dir=None, chi_deg=None, dpi=600
 
 # --- Compute full strain tensor ----------------------------------------
 def fit_lattice_cone_distortion(q_data, q_errors, q0_list, wavelength_nm,
-                                chi_deg=None, psi_deg=None, phi_deg=None, omega_deg=None, num_strain_components=3, output_dir=None, dpi=600, plot=True, logger=None):
+                                chi_deg=None, psi_deg=None, phi_deg=None, omega_deg=None, num_strain_components=3, output_dir=None, dpi=600, plot=True, logger=None, min_rsquared=0.5):
     """
     Fits lattice cone distortion model to q(chi) data to extract in-plane strain tensor components.
 
@@ -411,6 +432,8 @@ def fit_lattice_cone_distortion(q_data, q_errors, q0_list, wavelength_nm,
         q0_list (list): q0 values per ring (optimized or predefined)
         strain_vs_chi_path (str): File path of saved strain vs chi data
     """
+    import matplotlib.pyplot as plt
+    import statsmodels.api as sm
     logger = logger or logging.getLogger(__name__)
     os.makedirs(output_dir, exist_ok=True)
     # collect fitted strain-vs-chi curves for overlay
@@ -443,8 +466,36 @@ def fit_lattice_cone_distortion(q_data, q_errors, q0_list, wavelength_nm,
         q_vals = q_data[i]
         q_errs = q_errors[i]
         
+        # Filters out NaNs
         mask = ~np.isnan(q_vals) & ~np.isnan(q_errs)
         x, y, y_err = chi_deg[mask], q_vals[mask], q_errs[mask]
+        
+        # Filters the data via Median Absolute Deviation (MAD) method
+        if len(y) > 0: # Ensure there is data to filter
+            median_q = np.median(y)
+            abs_deviation = np.abs(y - median_q)
+            mad = np.median(abs_deviation)
+            
+            # Define the outlier threshold (3.0 is a good starting point)
+            threshold = 8.0 * mad
+            
+            # Keep only the points within the threshold
+            outlier_mask = abs_deviation < threshold
+            
+            # Log how many points were removed
+            num_outliers = len(y) - np.sum(outlier_mask)
+            if num_outliers > 0:
+                logger.info(f"Ring {i+1}: Removed {num_outliers} outliers using MAD filter.")
+                
+            # Apply the mask to your data
+            x = x[outlier_mask]
+            y = y[outlier_mask]
+            y_err = y_err[outlier_mask]
+        
+        # Ensures the minimum error is no smaller than min_error
+        min_error = 1e-6
+        y_err = np.maximum(y_err, min_error)
+
 
         if len(x) < 20:
             logger.warning(f"Ring {i+1}: insufficient data points ({len(x)} < 20). Skipping.")
@@ -485,6 +536,7 @@ def fit_lattice_cone_distortion(q_data, q_errors, q0_list, wavelength_nm,
             # --- Error Propagation for Weights ---
             # Error in y_meas = ln(q0/q) is approx. sigma_q / q
             y_meas_err = y_err / y
+            y_meas_err[y_meas_err == 0] = min_error # Avoid division by zero
             weights = 1.0 / (y_meas_err**2)
             
             epsilon = '\u03B5' # ε
@@ -510,6 +562,10 @@ def fit_lattice_cone_distortion(q_data, q_errors, q0_list, wavelength_nm,
             wls_model = sm.WLS(y_meas, F, weights=weights)
             results = wls_model.fit()
             
+            # Filtering fits based upon R-squared
+            if results.rsquared < min_rsquared:
+                raise ValueError(f"R-squared ({results.rsquared:.3f}) is below the threshold of {min_rsquared}.")
+
             # Store results and errors
             params = {f'{p}': val for p, val in zip(param_names, results.params)}
             errors = {f'{p}_err': err for p, err in zip(param_names, results.bse)}
@@ -528,11 +584,11 @@ def fit_lattice_cone_distortion(q_data, q_errors, q0_list, wavelength_nm,
                 ax.plot(x, y_meas, '.', markersize=3, label='ln(q₀/q)')
                 ax.plot(x, results.fittedvalues, '-', label='Fit') # Use results.fittedvalues
                 ax.set_ylabel(f'{epsilon}=ln(q₀/q)')
-                ax.set_title(f'Ring {i+1}')
+                ax.set_title(f'Ring {i+1} (q₀ = {q0_fixed:.4f} nm⁻¹)')
                 ax.legend(fontsize='small', loc='lower left', bbox_to_anchor=(1.02, 0.02))
         except Exception:
             if plot:
-                axes[i].set_title(f"Ring {i+1}: fit failed"); axes[i].axis('off')
+                axes[i].set_title(f"Ring {i+1} (q₀ = {q0_fixed:.4f} nm⁻¹): fit failed"); axes[i].axis('off')
             strain_params.append(nan_dict.copy())
             fit_vs_chi.append(np.full(n_bins, np.nan))
             logger.exception(f"Fit failed for Ring {i+1}")
@@ -542,7 +598,7 @@ def fit_lattice_cone_distortion(q_data, q_errors, q0_list, wavelength_nm,
         fig.tight_layout()
         fig_path = os.path.join(output_dir, "strain_vs_chi_plot_fitted.png")
         fig.savefig(fig_path)
-        plt.close(fig)
+        plt.close('all')
         logger.info(f"Combined distortion fit plot saved to: {fig_path}")
 
     # OUTDATED Convert strain_params to numpy array and save all six strain tensor components (excluding q0)
@@ -848,7 +904,6 @@ def generate_strain_maps_from_json(
             avg_error_maps[name] = avg_error_map
             calculate_and_log_map_error_metrics(avg_map, avg_error_map, title, logger, file_handle=f)
 
-
         # Plot averaged maps
         for comp in components_to_process:
             name = comp['name']
@@ -925,6 +980,7 @@ def reconstruct_rings_from_json(json_path, wavelength_nm, chi_step=1.0, logger=N
     Returns:
         dict: {ring_index: (chi_deg, q_sim)}
     """
+    import matplotlib.pyplot as plt
 
     with open(json_path, "r") as f:
         strain_data = json.load(f)
