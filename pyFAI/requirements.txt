@@ -54,7 +54,7 @@ patsy==1.0.1
 pillow==11.2.1
 platformdirs==4.3.8
 pydata-sphinx-theme==0.16.1
-pyFAI @ file:///Users/aaronwells/ResearchDocuments/Synchrotron_2025.02/Analysis_pyFAI/pyFAI
+pyFAI
 Pygments==2.19.1
 pyopencl==2025.2.1
 PyOpenGL==3.1.9
