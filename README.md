@@ -1,10 +1,66 @@
-These are the instructions for the workflow provided in this git repository. Please read all  the way to the bottom before using the scripts the first time. 
+These are the instructions for the workflow provided in this git repository. Please read all the way to the bottom before using the scripts the first time. 
 
->[!IMPORTANT]
->This workflow does require an installation of PyFAI with the additional libraries added to the  original requirements.txt file for PyFAI. This revised requirements.txt file can be found at  `*/Analysis_pyFAI/pyFAI/requirements.txt`. 
+# Installation Instructions
+>[!NOTE]
+>This repository automatically installs the pyFAI library using pip
+>For more information about this powerful library, see the [pyFAI documentation](https://pyfai.readthedocs.io/en/stable/index.html)
 
+Below are the instructions to install the pyFAI library and all other required libraries for this workflow:
 >[!TIP]
 >It is also **HIGHLY** recommended to run this workflow within its own Python virtual  environment. Please see [this link](https://docs.python.org/3/tutorial/venv.html) to learn more  about virtual environments, or look them up online. There are lots of useful resources on the  topic.
+
+## MacOS/Linux
+1. Open a terminal session
+1. Navigate to the parent directory into which you want to clone the repository
+```
+cd /path/to/parent/directory
+```
+1. Clone the git repository
+```
+git clone https://github.com/aaronzwells/Analysis_pyFAI.git
+```
+1. Go to the cloned repository
+```
+cd Analysis_pyFAI
+```
+1. Create the virtual environment
+```
+python3 -m venv .venv
+```
+1. Activate the virtual environment associated with the repository
+```
+source .venv/bin/activate
+```
+1. Install the required packages
+```
+pip install -r pyFAI/requirements.txt
+```
+## Windows
+1. Open Command Prompt or PowerShell
+1. Navigate to the parent directory
+```
+cd C:\path\to\parent\directory
+```
+1. Clone the git repository
+```
+git clone https://github.com/aaronzwells/Analysis_pyFAI.git
+```
+1. Go to the cloned repository
+```
+cd Analysis_pyFAI
+```
+1. Create the virtual environment
+```
+python -m venv .venv
+```
+1. Activate the virtual environment
+```
+.venv\Scripts\activate
+```
+1. Install the required packages
+```
+pip install -r pyFAI\requirements.txt
+```
 
 # OVERVIEW OF DIRECTORIES
 
@@ -12,27 +68,29 @@ These are the instructions for the workflow provided in this git repository. Ple
 
 **Analysis_pyFAI/** is the main directory where all inputs and output subdirectories are  located, as well as the script files (*.py). 
 
-## MAIN DIRECTORIES
+## USER DIRECTORIES
 
-**pyFAI/** is the directory where the pyFAI program is installed. For details on this  installation see the [PyFAI Documentation](https://pyfai.readthedocs.io/en/stable/index.html)  page.
+**InputFiles/** is the directory where all user-provided input images are housed. It is **_not included_ in  the git repository**, and should be created by the user. It was excluded due to the size of the  folders.
 
-**AdditionalFiles/** is the directory that houses extraneous data; it is primarily used for  `ValidationScript.py`
+**OutputData/** is where the batch process data is output
+
+**PeakFinding/** is where the reference peak data is stored after running 1.FindingRefPeaks.py
+
+**ValidationOutputFiles/** is where the data from 2.StrainCalc-SingleImage.py are saved
 
 **calibration/** is the directory where pyFAI calibration data should be stored. (The user is  responsible for storing the data here. It does not auto-save to this directory.) This data  includes *<ins>all</ins> .npt, .poni, .json files* related to calibration. It is also  recommended that *.tif* calibration images be saved to this folder, as it is a convenient way  to keep everything nicely contained.
 
-**InputFiles/** is the directory where all input images are housed. It is **_not included_ in  the git repository**, and should be created by the user. It was excluded due to the size of the  folders.
+## LIBRARY DIRECTORIES
 
-## SECONDARY DIRECTORIES
-
-**OldScripts/** is the directory that houses early revisions or editions of the scripts in this  workflow. Most are obsolete, but may be useful in certain scenarios.
-
-**ValidationOutputFiles/** is the directory that houses the output data from the validation  process, including all runs from `1.GettingPeakLocs.py` & `2.MainPipeline-noBatch.py`
+**pyFAI/** is the directory where the pyFAI program is installed. For details on this  installation see the [PyFAI Documentation](https://pyfai.readthedocs.io/en/stable/index.html)  page.
 
 ## SCRIPT-GENERATED DIRECTORIES
 
-**__pycache__/** is a folder that houses all cached data from the batch processing steps. There  is no need for the user to ever interact with this directory as it is auto-generated.
+**OutputData/OutputFiles*/** directories are generated automatically during script generation. These are named  with the following format:  "OutputFiles\_\<kind_of_output\>\_\<sample_name\>\_\<date_and_time\>"
 
-__OutputFiles*/__ directories are generated automatically during script generation. These are named  with the following format:  "OutputFiles\_\<kind_of_output\>\_\<input_file_name\>\_\<date_and_time\>"
+**OutputMaps_*/** directories are created to house the final stress and strain maps. Each map directory is time  stamped and uses the above ^^ naming convention.
+
+**__pycache__/** is a folder that houses all cached data from the batch processing steps. There  is no need for the user to ever interact with this directory as it is auto-generated.
 
 # WORKFLOW OVERVIEW
 
@@ -41,7 +99,10 @@ Before executing the workflow, ValidationScript.py can be used to run the peak f
 >[!NOTE]
 >The main workflow scripts are numbered and may be referred to as "*Script 1*", "*Script 2*", etc.
 
-## WORKFLOW OUTLINE/SUMMARY
+## WORKFLOW OUTLINE & SUMMARY
+
+>[!CAUTION]
+>This section needs to be rewritten to reflect recent updates.
 
 1. The first true workflow script is `1.GettingPeakLocs.py`. This script allows the user to  input their calibration *.poni* file and a representative *.tif* or *.tiff* file and have PyFAI  determine good initial guesses for the first 9 peaks. It then outputs this data to a folder,  named after your input file, within the `ValidationOutputFiles/PeakFinding/` directory. 
 
@@ -58,6 +119,9 @@ Before executing the workflow, ValidationScript.py can be used to run the peak f
 >*Script 4b* has not been completed yet. Do not use until finalized.
 
 ## REQUIRED USER-DEFINED VARIABLES
+
+>[!CAUTION]
+>This section needs to be rewritten to reflect recent updates.
 
 >[!NOTE]
 >See the comments in the code for a definition of each variable
