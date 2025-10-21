@@ -1,6 +1,11 @@
+calibration/
+!calibration/*.poni
 InputFiles/
+!InputFiles/Reference_0Strain_inputs
 OutputData/
 OutputMaps*/
+PeakFinding/
+!PeakFinding/Summary_Peak_Locations.txt
 __pycache__/
-ValidationOutputFiles/
+ValidationOutputFiles/*
 pyfai-env/
