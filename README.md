@@ -11,56 +11,56 @@ Below are the instructions to install the pyFAI library and all other required l
 
 ## MacOS/Linux
 1. Open a terminal session
-1. Navigate to the parent directory into which you want to clone the repository
-```
-cd /path/to/parent/directory
-```
-1. Clone the git repository
-```
-git clone https://github.com/aaronzwells/Analysis_pyFAI.git
-```
-1. Go to the cloned repository
-```
-cd Analysis_pyFAI
-```
-1. Create the virtual environment
-```
-python3 -m venv .venv
-```
-1. Activate the virtual environment associated with the repository
-```
-source .venv/bin/activate
-```
-1. Install the required packages
-```
-pip install -r pyFAI/requirements.txt
-```
+2. Navigate to the parent directory into which you want to clone the repository
+  ```
+  cd /path/to/parent/directory
+  ```
+3. Clone the git repository
+  ```
+  git clone https://github.com/aaronzwells/Analysis_pyFAI.git
+  ```
+4. Go to the cloned repository
+  ```
+  cd Analysis_pyFAI
+  ```
+5. Create the virtual environment
+  ```
+  python3 -m venv .venv
+  ```
+6. Activate the virtual environment associated with the repository
+  ```
+  source .venv/bin/activate
+  ```
+7. Install the required packages
+  ```
+  pip install -r pyFAI/requirements.txt
+  ```
 ## Windows
 1. Open Command Prompt or PowerShell
-1. Navigate to the parent directory
-```
-cd C:\path\to\parent\directory
-```
-1. Clone the git repository
-```
-git clone https://github.com/aaronzwells/Analysis_pyFAI.git
-```
-1. Go to the cloned repository
-```
-cd Analysis_pyFAI
-```
-1. Create the virtual environment
-```
-python -m venv .venv
-```
-1. Activate the virtual environment
-```
-.venv\Scripts\activate
-```
-1. Install the required packages
-```
-pip install -r pyFAI\requirements.txt
-```
+2. Navigate to the parent directory
+  ```
+  cd C:\path\to\parent\directory
+  ```
+3. Clone the git repository
+  ```
+  git clone https://github.com/aaronzwells/Analysis_pyFAI.git
+  ```
+4. Go to the cloned repository
+  ```
+  cd Analysis_pyFAI
+  ```
+5. Create the virtual environment
+  ```
+  python -m venv .venv
+  ```
+6. Activate the virtual environment
+  ```
+  .venv\Scripts\activate
+  ```
+7. Install the required packages
+  ```
+  pip install -r pyFAI\requirements.txt
+  ```
 
 # OVERVIEW OF DIRECTORIES
 
@@ -72,7 +72,9 @@ pip install -r pyFAI\requirements.txt
 
 **InputFiles/** is the directory where all user-provided input images are housed. It is **_not included_ in  the git repository**, and should be created by the user. It was excluded due to the size of the  folders.
 
-**OutputData/** is where the batch process data is output
+__OutputData/OutputFiles*/__ directories are generated automatically during script generation. These are named  with the following format:  "OutputFiles\_\<kind_of_output\>\_\<sample_name\>\_\<date_and_time\>"
+
+**OutputMaps_*/** directories are created to house the final stress and strain maps. Each map directory is time  stamped and uses the above ^^ naming convention.
 
 **PeakFinding/** is where the reference peak data is stored after running 1.FindingRefPeaks.py
 
@@ -80,15 +82,9 @@ pip install -r pyFAI\requirements.txt
 
 **calibration/** is the directory where pyFAI calibration data should be stored. (The user is  responsible for storing the data here. It does not auto-save to this directory.) This data  includes *<ins>all</ins> .npt, .poni, .json files* related to calibration. It is also  recommended that *.tif* calibration images be saved to this folder, as it is a convenient way  to keep everything nicely contained.
 
-## LIBRARY DIRECTORIES
+## AUXILIARY DIRECTORIES
 
-**pyFAI/** is the directory where the pyFAI program is installed. For details on this  installation see the [PyFAI Documentation](https://pyfai.readthedocs.io/en/stable/index.html)  page.
-
-## SCRIPT-GENERATED DIRECTORIES
-
-**OutputData/OutputFiles*/** directories are generated automatically during script generation. These are named  with the following format:  "OutputFiles\_\<kind_of_output\>\_\<sample_name\>\_\<date_and_time\>"
-
-**OutputMaps_*/** directories are created to house the final stress and strain maps. Each map directory is time  stamped and uses the above ^^ naming convention.
+**pyFAI/** is the directory where the pyFAI program is installed. For details on this installation see the [PyFAI Documentation](https://pyfai.readthedocs.io/en/stable/index.html) page.
 
 **__pycache__/** is a folder that houses all cached data from the batch processing steps. There  is no need for the user to ever interact with this directory as it is auto-generated.
 
