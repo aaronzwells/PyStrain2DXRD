@@ -4,3 +4,5 @@ OutputMaps*/
 __pycache__/
 ValidationOutputFiles/
 pyfai-env/
+.venv/
+venv/
