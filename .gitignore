@@ -3,3 +3,4 @@ OutputData/
 OutputMaps*/
 __pycache__/
 ValidationOutputFiles/
+.venv/
