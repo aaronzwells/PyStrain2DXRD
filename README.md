@@ -1,3 +1,4 @@
+# Analysis_pyFAI Documentation
 These are the instructions for the workflow provided in this git repository. Please read all the way to the bottom before using the scripts the first time. 
 
 # Installation Instructions

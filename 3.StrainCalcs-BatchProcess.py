@@ -52,6 +52,7 @@ def batch_main_pipeline(config):
             save_chi_files = config['save_chi_files']
             plot_q_vs_chi = config['plot_q_vs_chi']
             plot_strain_vs_chi = config['plot_strain_vs_chi']
+            save_adjusted_tif = config['save_adjusted_tif']
             tif_file = tif_path
             mask_thresh = config['mask_thresh']
             num_azim_bins = config['num_azim_bins']
@@ -74,7 +75,8 @@ def batch_main_pipeline(config):
                 tif_file,
                 output_path=output_path,
                 mask_threshold=mask_thresh,
-                logger=file_logger
+                logger=file_logger,
+                save_adjusted_tif=save_adjusted_tif
             )
             
             if save_chi_files:
@@ -204,6 +206,7 @@ if __name__ == "__main__":
         'save_chi_files': False, # toggles saving the azimuthal q data for each bin
         'plot_q_vs_chi': False, # toggles plotting q vs chi plots
         'plot_strain_vs_chi': False, # toggles plotting unfitted strain vs chi plots
+        'save_adjusted_tif': False, # toggles saving the adjusted TIF files
         'num_jobs_parallel': -2, # Uses all cores except for 1 to perform parallel calculations (-1 indicates using the maximum number of cores)
         'mask_thresh': 4e2, # mask threshold for pixels; not used unless chosen; can be left at 4e2
         'num_azim_bins': 120, # number of azimuthal bins for averaging the peaks

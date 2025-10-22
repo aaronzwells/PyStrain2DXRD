@@ -172,7 +172,7 @@ def pseudo_voigt(x, amp, cen, wid, eta):
     return eta * lorentz + (1 - eta) * gauss
 
 # --- PyFAI data loading & integration -----------------------------------
-def load_integrator_and_data(poni_path, tif_path, output_path, ref_tif_path=None, mask_threshold=4e2, logger=None):
+def load_integrator_and_data(poni_path, tif_path, output_path, ref_tif_path=None, mask_threshold=4e2, logger=None, save_adjusted_tif=True):
     """
     Load/initialize PyFAI integrator and adjust a 2D XRD image using an auto-CB 
     scheme from ImageJ. Saves the adjusted image.
@@ -204,17 +204,20 @@ def load_integrator_and_data(poni_path, tif_path, output_path, ref_tif_path=None
     data_adj = data_adj_float
 
     logger = logger or logging.getLogger(__name__)
-    # Save adjusted TIF alongside the original
-    base, ext = os.path.splitext(tif_path)
-    filename = os.path.basename(base)
-    adjusted_path = f"{output_path}/{filename}_adjusted{ext}"
-    imageio.imwrite(adjusted_path, data_adj)
-    logger.info(f"Adjusted image saved to: {adjusted_path}")
+    if save_adjusted_tif:
+        # Save adjusted TIF alongside the original
+        base, ext = os.path.splitext(tif_path)
+        filename = os.path.basename(base)
+        adjusted_path = f"{output_path}/{filename}_adjusted{ext}"
+        imageio.imwrite(adjusted_path, data_adj)
+        logger.info(f"Adjusted image saved to: {adjusted_path}")
+    else:
+        logger.info(f"Adjusted image not saved.")
 
     # This function does not compute a mask; it returns None.
     return ai, data_adj, None
 
-def load_and_prep_image(tif_path, output_path, mask_threshold=4e2, logger=None):
+def load_and_prep_image(tif_path, output_path, mask_threshold=4e2, logger=None, save_adjusted_tif=True):
     """
     Loads and prepares a single TIFF image for integration.
 
@@ -238,12 +241,16 @@ def load_and_prep_image(tif_path, output_path, mask_threshold=4e2, logger=None):
     data = img.data.astype(np.float32)
     data_adj = imagej_autocontrast(data, k=3.0)
 
-    # Save the adjusted image
-    base, ext = os.path.splitext(tif_path)
-    filename = os.path.basename(base)
-    adjusted_path = f"{output_path}/{filename}_adjusted{ext}"
-    imageio.imwrite(adjusted_path, data_adj)
-    logger.info(f"Adjusted image saved to: {adjusted_path}")
+    if save_adjusted_tif:
+        # Save the adjusted image
+        base, ext = os.path.splitext(tif_path)
+        filename = os.path.basename(base)
+        adjusted_path = f"{output_path}/{filename}_adjusted{ext}"
+        imageio.imwrite(adjusted_path, data_adj)
+        logger.info(f"Adjusted image saved to: {adjusted_path}")
+    else: 
+        logger.info(f"Adjusted image not saved.")
+
 
     # This function does not compute a mask; it returns None.
     return data_adj, None
@@ -502,7 +509,7 @@ def plot_strain_vs_chi_stacked(file_path, output_dir=None, chi_deg=None, dpi=600
 
 # --- Compute full strain tensor ----------------------------------------
 def fit_lattice_cone_distortion(q_data, q_errors, q0_list, wavelength_nm,
-                                chi_deg=None, psi_deg=None, phi_deg=None, omega_deg=None, num_strain_components=3, output_dir=None, dpi=600, plot=True, logger=None, min_rsquared=0.5):
+                                chi_deg=None, psi_deg=None, phi_deg=None, omega_deg=None, num_strain_components=3, output_dir=None, dpi=600, plot=True, logger=None, min_rsquared=0.0):
     """
     Fits a lattice cone distortion model to q(χ) data to extract strain tensor components.
 
