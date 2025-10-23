@@ -148,7 +148,7 @@ def imagej_autocontrast(image, k=2.5):
 
 # --- Pseudo-Voigt profile -----------------------------------------------
 @njit(cache=True)
-def pseudo_voigt(x, amp, cen, wid, eta):
+def pseudo_voigt(x, amp, cen, wid, eta, bg_const): # bg_slope
     """
     A pseudo-Voigt profile, which is a linear combination of Gaussian and Lorentzian profiles.
 
@@ -161,6 +161,8 @@ def pseudo_voigt(x, amp, cen, wid, eta):
         cen (float): The center of the peak.
         wid (float): The full width at half maximum (FWHM) of the peak.
         eta (float): The mixing parameter between Gaussian (0) and Lorentzian (1).
+        # bg_const (float): Constant (y-intercept) of the background.
+        # bg_slope (float): Slope of the background.
 
     Returns:
         np.ndarray: The calculated pseudo-Voigt profile.
@@ -169,7 +171,8 @@ def pseudo_voigt(x, amp, cen, wid, eta):
     gamma = wid / 2
     gauss   = amp * np.exp(-((x - cen) ** 2) / (2 * sigma ** 2))
     lorentz = amp * (gamma ** 2) / ((x - cen) ** 2 + gamma ** 2)
-    return eta * lorentz + (1 - eta) * gauss
+    background = bg_const # + bg_slope * (x - cen) # Centering the slope term improves fit stability
+    return eta * lorentz + (1 - eta) * gauss + background
 
 # --- PyFAI data loading & integration -----------------------------------
 def load_integrator_and_data(poni_path, tif_path, output_path, ref_tif_path=None, mask_threshold=4e2, logger=None, save_adjusted_tif=True):
@@ -374,8 +377,12 @@ def fit_peaks_with_initial_guesses(I2d, q, q_peaks, delta_tol=0.07, eta0=0.5, n_
 
             try:
                 # Perform the curve fit
-                p0 = [np.max(y), q0, wid0, eta0]
-                bounds = ([0, q0 - tol_dn, 0, 0], [np.inf, q0 + tol_up, np.inf, 1])
+                bg_const_guess = np.min(y) # Guess the background is at the minimum intensity in the window
+                p0 = [np.max(y) - bg_const_guess, q0, wid0, eta0, bg_const_guess]
+                # p0 = [np.max(y), q0, wid0, eta0]
+                bounds = ([-np.inf, q0 - tol_dn, 0, 0, -np.inf], 
+                          [np.inf, q0 + tol_up, np.inf, 1, np.inf])
+                
                 popt, pcov = curve_fit(pseudo_voigt, x, y, p0=p0, bounds=bounds)
                 
                 # Extract fitted parameters and their standard errors
@@ -508,7 +515,7 @@ def plot_strain_vs_chi_stacked(file_path, output_dir=None, chi_deg=None, dpi=600
         logger.info(f"Stacked strain vs chi plot saved to: {scatter_path}")
 
 # --- Compute full strain tensor ----------------------------------------
-def fit_lattice_cone_distortion(q_data, q_errors, q0_list, wavelength_nm,
+def fit_lattice_cone_distortion(q_data, q_errors, q0_chi_data, initial_q_guesses, wavelength_nm,
                                 chi_deg=None, psi_deg=None, phi_deg=None, omega_deg=None, num_strain_components=3, output_dir=None, dpi=600, plot=True, logger=None, min_rsquared=0.0):
     """
     Fits a lattice cone distortion model to q(χ) data to extract strain tensor components.
@@ -520,7 +527,8 @@ def fit_lattice_cone_distortion(q_data, q_errors, q0_list, wavelength_nm,
     Args:
         q_data (np.ndarray): Array of q centroids of shape (n_rings, n_chi_bins).
         q_errors (np.ndarray): Array of q centroid errors of shape (n_rings, n_chi_bins).
-        q0_list (list): List of unstrained lattice spacings (q0) for each ring.
+        q0_chi_data (np.ndarray): Array of unstrained lattice spacings (q0) for each ring.
+        initial_q_guesses (list): List of initial q values, used for plot titles.
         wavelength_nm (float): X-ray wavelength in nanometers.
         chi_deg (np.ndarray, optional): Azimuthal angles in degrees. Defaults to a uniform grid.
         psi_deg, phi_deg, omega_deg (np.ndarray, optional): Sample orientation angles. Defaults to a simple geometry.
@@ -566,10 +574,14 @@ def fit_lattice_cone_distortion(q_data, q_errors, q0_list, wavelength_nm,
     for i in range(n_rings):
         q_vals = q_data[i]
         q_errs = q_errors[i]
+        q0_vals = q0_chi_data[i]
         
+        # Defining q0_fixed for naming of plots
+        q0_fixed = initial_q_guesses[i]
+
         # Filter out any NaN values from the input data
-        mask = ~np.isnan(q_vals) & ~np.isnan(q_errs)
-        x, y, y_err = chi_deg[mask], q_vals[mask], q_errs[mask]
+        mask = ~np.isnan(q_vals) & ~np.isnan(q_errs) & ~np.isnan(q0_vals)
+        x, y, y_err, q0_masked = chi_deg[mask], q_vals[mask], q_errs[mask], q0_vals[mask]
         
         # Filter outliers using the Median Absolute Deviation (MAD) method
         if len(y) > 0: # Ensure there is data to filter
@@ -606,7 +618,7 @@ def fit_lattice_cone_distortion(q_data, q_errors, q0_list, wavelength_nm,
             fit_vs_chi.append(np.full(n_bins, np.nan))
             continue
 
-        q0_fixed = q0_list[i]
+        # q0_fixed = q0_list[i]
         try:
             # --- Geometric Transformations and Model Setup ---
             chi_rad   = np.deg2rad(90-x) # transform so χ is aligned with the coordinate system in He & Smith 1998
@@ -632,7 +644,7 @@ def fit_lattice_cone_distortion(q_data, q_errors, q0_list, wavelength_nm,
             
             # The model is y_meas = F * [strain_components]
             F_all = np.vstack([f11, f12, f22, f13, f23, f33]).T
-            y_meas = np.log(q0_fixed / y)
+            y_meas = np.log(q0_masked / y)
             
             # Propagate errors to get weights for the Weighted Least Squares (WLS) fit
             # Error in y_meas = ln(q0/q) is approx. sigma_q / q
@@ -674,7 +686,7 @@ def fit_lattice_cone_distortion(q_data, q_errors, q0_list, wavelength_nm,
             
             # Fill in NaNs for components not in the fit
             full_params = nan_dict.copy()
-            full_params['q0'] = q0_fixed
+            full_params['q0'] = np.mean(q0_masked)
             full_params.update(params)
             full_params.update(errors)
             
@@ -718,15 +730,13 @@ def fit_lattice_cone_distortion(q_data, q_errors, q0_list, wavelength_nm,
     q0_list_out = [p.get('q0', np.nan) for p in strain_params]
 
     # Save the full strain vs chi array
-    strain_vs_chi = (np.array(q0_list_out).reshape(-1, 1) - q_data) / np.array(q0_list_out).reshape(-1, 1)
+    strain_vs_chi = (q0_chi_data - q_data) / q0_chi_data
     strain_vs_chi_path = os.path.join(output_dir, "strain_vs_chi_peaks.txt")
     np.savetxt(strain_vs_chi_path, strain_vs_chi, fmt="%.6e", delimiter="\t",
                header="Rows = diffraction rings; Columns = azimuthal bins (strain vs chi data)")
     logger.info(f"Strain vs chi centroid data saved to: {strain_vs_chi_path}")
 
     return strain_params, strain_list, q0_list_out, strain_vs_chi_path
-
-# In FunctionLibrary.py, add this new function
 
 def calculate_and_log_map_error_metrics(data_map, error_map, map_name, logger, file_handle=None):
     """
