@@ -33,15 +33,16 @@ def batch_main_pipeline(config):
     logger.info(f"Loading calibrant file once...")
     try: 
         ai = pyFAI.load(config['poni_file'])
-        logger.info("Calibrant loaded successfully.")
+        q0_chi_ref = np.loadtxt(config['q0_reference_file'])
+        logger.info("Calibrant and q0 reference files loaded successfully.")
     except Exception as e:
-        logger.error(f"FATAL: Could not load poni file '{config['poni_file']}'. Aborting. Error: {e}")
+        logger.error(f"FATAL: Either the poni or q0 reference file could not be loaded '{config['poni_file']}'. Aborting. Error: {e}")
         return
 
     tif_paths = sorted(glob.glob(os.path.join(input_dir, "*.tiff")))
     logger.info(f"Found {len(tif_paths)} .tif files in {input_dir}")
 
-    def run_pipeline_for_file(tif_path, config, output_directory, ai):
+    def run_pipeline_for_file(tif_path, config, output_directory, ai, q0_chi_ref):
         # Initializing the per-image log files
         filename = os.path.splitext(os.path.basename(tif_path))[0]
         log_path = os.path.join(output_directory, f"{filename}_pipeline.log")
@@ -117,7 +118,8 @@ def batch_main_pipeline(config):
             strain_tensor_components, strain_list, q0_list, strain_vs_chi_file = fl.fit_lattice_cone_distortion(
                 q_data=q_vs_chi,
                 q_errors=q_vs_chi_errors,
-                q0_list=initial_q_guesses,
+                q0_chi_data=q0_chi_ref,
+                initial_q_guesses=initial_q_guesses,
                 wavelength_nm=wavelength_nm,
                 chi_deg=chi,
                 psi_deg=None,
@@ -148,7 +150,7 @@ def batch_main_pipeline(config):
 
     # --- Runs the batch processing script in parallel ---
     Parallel(n_jobs=n_jobs)(
-        delayed(run_pipeline_for_file)(tif_path, config, output_directory, ai) for tif_path in tif_paths
+        delayed(run_pipeline_for_file)(tif_path, config, output_directory, ai, q0_chi_ref) for tif_path in tif_paths
     )
 
     logger.info(f"Proceeding to save strain tensor summary")
@@ -200,9 +202,10 @@ def setup_logger(log_path, logger_name=None):
 if __name__ == "__main__":
     multiprocessing.set_start_method('spawn') # spawn just defines a type of parallel processing
     config = { # --- main analysis configuration dictionary ---
-        'input_dir': "InputFiles/200C_cool_AO_inputs", # directory housing the input images
-        'sampleName': "VB-APS-SSAO-6_200C_cool", # name used to create output data files
+        'input_dir': "InputFiles/25C_AO_inputs", # directory housing the input images
+        'sampleName': "VB-APS-SSAO-6_25C", # name used to create output data files
         'poni_file': "calibration/Calibration_LaB6_100x100_3s_r8_mod2.poni", # calibration file path
+        'q0_reference_file': "ValidationOutputFiles/VB-APS-SSAO-6_25C_Map-AO_000304/q0_vs_chi_FITTED.txt", # q0 reference file path
         'save_chi_files': False, # toggles saving the azimuthal q data for each bin
         'plot_q_vs_chi': False, # toggles plotting q vs chi plots
         'plot_strain_vs_chi': False, # toggles plotting unfitted strain vs chi plots
@@ -216,14 +219,14 @@ if __name__ == "__main__":
         'wavelength_nm': 0.1729786687, # X-ray wavelength [nm]
         'solved_strain_components': 5, # 3=biaxial, 5=biaxial+shear, 6=full
         'initial_q_guesses': [ # Initial q-values retrieved from 1.FindingRefPeaks.py for the particular dataset in question
-            17.937944,
-            24.470245,
-            26.239514,
-            29.938474,
-            35.886943,
-            38.988240,
-            44.459118,
-            45.461021
+            17.961188,
+            24.500613,
+            26.267830,
+            29.974002,
+            35.926353,
+            39.034769,
+            44.513621,
+            45.514461
         ],
         'tol_array': [ # The tolerance in q [nm^-1] for finding the peak centroids
             [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1], # looking up in q (larger values)

@@ -33,7 +33,8 @@ def setup_logger(log_path, logger_name=None):
 def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tensor_path=None):
     start_time = time.time()
     poni_file     = "calibration/Calibration_LaB6_100x100_3s_r8_mod2.poni"
-    tif_file      = tif_override or "InputFiles/25C_AO_inputs/VB-APS-SSAO-6_25C_Map-AO_000304.avg.tiff"
+    q0_reference_file = None #"ValidationOutputFiles/VB-APS-SSAO-6_25C_Map-AO_000304/q_vs_chi_peaks.txt"
+    tif_file      = tif_override or "InputFiles/Reference_0Strain_inputs/VB-APS-SSAO-6_25C_Map-AO_000304.avg.tiff"
     save_chi_files = False # this determines whether every q vs chi bin dataset is saved as a separate file or if the file writing is skipped
     save_adjusted_tif = False
     mask_thresh   = 4e2 # threshold value for the image mask
@@ -53,24 +54,7 @@ def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tenso
                 44.513621,
                 45.514461
             ]
-    # initial_q_guesses = [
-    #     17.957430, 
-    #     24.499120, 
-    #     26.267714, 
-    #     29.972252, 
-    #     35.923938, 
-    #     39.032177, 
-    #     41.355087, 
-    #     44.509848] # initial guesses for peak fitting [nm^-1] for Alumina
-    # initial_q_guesses = [ # initial guesses for peak fitting [nm^-1] for calibrant
-    #     15.111021, 
-    #     21.370204, 
-    #     26.171220, 
-    #     30.222884, 
-    #     33.791341, 
-    #     37.018340, 
-    #     42.747420, 
-    #     45.341304] 
+     
     tol_array   = np.array([ # tolerance values for q when searching for a peak to fit [nm^-1] for calibrant
         [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1], # larger q
         [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]]) # smaller q
@@ -135,11 +119,29 @@ def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tenso
         plot=True,
         logger=file_logger)
 
+    # Initialize the q0 data
+    if q0_reference_file:
+        try: 
+            q0_chi_ref = np.loadtxt(q0_reference_file)
+            file_logger.info(f"Loaded q0(chi) reference data from {q0_reference_file}")
+        except Exception as e:
+            file_logger.error(f"FATAL: Could not load q0 reference file: {e}")
+            return
+    else:
+        # If no file is provided, create a "self-referenced" baseline
+        # This uses the average q of each ring as its own reference
+        file_logger.info("No q0_reference_file provided. Creating a self-referenced baseline.")
+        # Calculate the mean q for each ring, ignoring any NaN values
+        mean_q_per_ring = np.nanmean(q_vs_chi, axis=1, keepdims=True)
+        # Create the reference array by repeating the mean value across all azimuthal bins
+        q0_chi_ref = np.tile(mean_q_per_ring, (1, q_vs_chi.shape[1]))
+
     # Fit the full strain tensor using least squares and the full tensor model
     strain_tensor_components, strain_list, q0_list, strain_vs_chi_file = fl.fit_lattice_cone_distortion(
         q_data=q_vs_chi,
         q_errors=q_vs_chi_errors,
-        q0_list=initial_q_guesses,
+        q0_chi_data=q0_chi_ref,
+        initial_q_guesses=initial_q_guesses,
         wavelength_nm=wavelength_nm,
         chi_deg=chi,
         psi_deg=None,
