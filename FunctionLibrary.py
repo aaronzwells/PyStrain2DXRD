@@ -547,6 +547,7 @@ def fit_lattice_cone_distortion(q_data, q_errors, q0_chi_data, initial_q_guesses
     os.makedirs(output_dir, exist_ok=True)
     # collect fitted strain-vs-chi curves for overlay
     fit_vs_chi = []
+    q_fit_vs_chi_list = []
 
     # q_data is provided as a numpy array of shape (n_rings, n_bins)
     n_rings, n_bins = q_data.shape
@@ -555,11 +556,11 @@ def fit_lattice_cone_distortion(q_data, q_errors, q0_chi_data, initial_q_guesses
         chi_deg = np.linspace(0, 360, n_bins, endpoint=False)
     # set default orientation angles if not provided
     if psi_deg is None:
-        psi_deg = np.full_like(chi_deg, 0.0) # ψ = 0°
+        psi_deg_full = np.full_like(chi_deg, 0.0) # ψ = 0°
     if phi_deg is None:
-        phi_deg = np.full_like(chi_deg, 0.0) # φ = 0°
+        phi_deg_full = np.full_like(chi_deg, 0.0) # φ = 0°
     if omega_deg is None:
-        omega_deg = np.full_like(chi_deg, 90.0) # ω = 90°
+        omega_deg_full = np.full_like(chi_deg, 90.0) # ω = 90°
 
     strain_params = []
     fig, axes = (plt.subplots(n_rings, 1, figsize=(10, 2 * n_rings), dpi=dpi, sharex=True) if plot else (None, None))
@@ -574,36 +575,64 @@ def fit_lattice_cone_distortion(q_data, q_errors, q0_chi_data, initial_q_guesses
     for i in range(n_rings):
         q_vals = q_data[i]
         q_errs = q_errors[i]
-        q0_vals = q0_chi_data[i]
+        q0_vals_full = q0_chi_data[i] 
         
         # Defining q0_fixed for naming of plots
         q0_fixed = initial_q_guesses[i]
 
+        # --- Calculate the FULL-RANGE geometric design matrix (F_all_full) ---
+        # This is used later to predict the smooth fitted curve
+        try:
+            chi_rad_full   = np.deg2rad(90-chi_deg)
+            psi_rad_full   = np.deg2rad(psi_deg_full)
+            phi_rad_full   = np.deg2rad(phi_deg_full)
+            omega_rad_full = np.deg2rad(omega_deg_full)
+            
+            # Use the FULL q0(chi) reference to calculate theta for the model
+            theta_full     = np.arcsin((q0_vals_full * wavelength_nm) / (4 * np.pi))
+            sin_chi_full   = np.sin(chi_rad_full)
+            cos_chi_full   = np.cos(chi_rad_full)
+            sin_theta_full = np.sin(theta_full)
+            cos_theta_full = np.cos(theta_full)
+
+            a_full = sin_theta_full * np.cos(omega_rad_full) + sin_chi_full * cos_theta_full * np.sin(omega_rad_full)
+            b_full = -cos_chi_full * cos_theta_full
+            c_full = sin_theta_full * np.sin(omega_rad_full) - sin_chi_full * cos_theta_full * np.cos(omega_rad_full)
+            
+            A_full = a_full * np.cos(phi_rad_full) - b_full * np.cos(psi_rad_full) * np.sin(phi_rad_full) + c_full * np.sin(psi_rad_full) * np.sin(phi_rad_full)
+            B_full = a_full * np.sin(phi_rad_full) + b_full * np.cos(psi_rad_full) * np.cos(phi_rad_full) - c_full * np.sin(psi_rad_full) * np.cos(phi_rad_full)
+            C_full = b_full * np.sin(psi_rad_full) + c_full * np.cos(psi_rad_full)
+            
+            f11_full, f12_full, f22_full = A_full**2, 2*A_full*B_full, B_full**2
+            f13_full, f23_full, f33_full = 2*A_full*C_full, 2*B_full*C_full, C_full**2
+            
+            F_all_full = np.vstack([f11_full, f12_full, f22_full, f13_full, f23_full, f33_full]).T
+        
+        except Exception as e:
+            logger.error(f"Failed to build geometric model for Ring {i+1}. Skipping. Error: {e}")
+            strain_params.append(nan_dict.copy())
+            q_fit_vs_chi_list.append(np.full(n_bins, np.nan))
+            if plot:
+                axes[i].set_title(f"Ring {i+1}: Model build failed"); axes[i].axis('off')
+            continue
+
         # Filter out any NaN values from the input data
-        mask = ~np.isnan(q_vals) & ~np.isnan(q_errs) & ~np.isnan(q0_vals)
-        x, y, y_err, q0_masked = chi_deg[mask], q_vals[mask], q_errs[mask], q0_vals[mask]
+        mask = ~np.isnan(q_vals) & ~np.isnan(q_errs) & ~np.isnan(q0_vals_full)
+        x, y, y_err, q0_masked = chi_deg[mask], q_vals[mask], q_errs[mask], q0_vals_full[mask]
         
         # Filter outliers using the Median Absolute Deviation (MAD) method
         if len(y) > 0: # Ensure there is data to filter
             median_q = np.median(y)
             abs_deviation = np.abs(y - median_q)
             mad = np.median(abs_deviation)
-            
-            # Define the outlier threshold (3.0 is a good starting point)
-            threshold = 8.0 * mad
-            
-            # Keep only the points within the threshold
-            outlier_mask = abs_deviation < threshold
-            
-            # Log how many points were removed
-            num_outliers = len(y) - np.sum(outlier_mask)
+            threshold = 8.0 * mad # Define the outlier threshold (3.0 is a good starting point)
+            outlier_mask = abs_deviation < threshold # Keep only the points within the threshold
+            num_outliers = len(y) - np.sum(outlier_mask) # Log how many points were removed
             if num_outliers > 0:
                 logger.info(f"Ring {i+1}: Removed {num_outliers} outliers using MAD filter.")
                 
-            # Apply the mask to your data
-            x = x[outlier_mask]
-            y = y[outlier_mask]
-            y_err = y_err[outlier_mask]
+            # Apply outlier_mask to all data arrays, including q0_masked
+            x, y, y_err, q0_masked = x[outlier_mask], y[outlier_mask], y_err[outlier_mask], q0_masked[outlier_mask]
         
         # Ensure a minimum error value to avoid division by zero in weights
         min_error = 1e-6
@@ -618,13 +647,12 @@ def fit_lattice_cone_distortion(q_data, q_errors, q0_chi_data, initial_q_guesses
             fit_vs_chi.append(np.full(n_bins, np.nan))
             continue
 
-        # q0_fixed = q0_list[i]
         try:
             # --- Geometric Transformations and Model Setup ---
             chi_rad   = np.deg2rad(90-x) # transform so χ is aligned with the coordinate system in He & Smith 1998
-            psi_rad   = np.deg2rad(psi_deg[mask])
-            phi_rad   = np.deg2rad(phi_deg[mask])
-            omega_rad = np.deg2rad(omega_deg[mask])
+            psi_rad   = np.deg2rad(psi_deg_full[mask][outlier_mask]) # Use consistent geometry
+            phi_rad   = np.deg2rad(phi_deg_full[mask][outlier_mask])
+            omega_rad = np.deg2rad(omega_deg_full[mask][outlier_mask])
             # Compute θ for each centroid: θ = arcsin(q*λ/(4π))
             theta     = np.arcsin((y * wavelength_nm) / (4 * np.pi))
             sin_chi   = np.sin(chi_rad)
@@ -643,7 +671,7 @@ def fit_lattice_cone_distortion(q_data, q_errors, q0_chi_data, initial_q_guesses
             f11, f12, f22, f13, f23, f33 = A**2, 2*A*B, B**2, 2*A*C, 2*B*C, C**2
             
             # The model is y_meas = F * [strain_components]
-            F_all = np.vstack([f11, f12, f22, f13, f23, f33]).T
+            F_all_masked = np.vstack([f11, f12, f22, f13, f23, f33]).T
             y_meas = np.log(q0_masked / y)
             
             # Propagate errors to get weights for the Weighted Least Squares (WLS) fit
@@ -656,15 +684,18 @@ def fit_lattice_cone_distortion(q_data, q_errors, q0_chi_data, initial_q_guesses
             logger.info(f"The model is solving for {num_strain_components} strain components.")
             # Select the appropriate columns of the design matrix F based on the desired model
             if num_strain_components == 6:
-                F = F_all
+                F_fit = F_all_masked
+                F_model = F_all_full # Full model for prediction
                 param_names = ['eps_xx', 'eps_xy', 'eps_yy', 'eps_xz', 'eps_yz', 'eps_zz']
                 if i==1: logger.info(f"No strain components are set to 0")
             elif num_strain_components == 5:
-                F = F_all[:, [0, 1, 2, 3, 4]]
+                F_fit = F_all_masked[:, [0, 1, 2, 3, 4]]
+                F_model = F_all_full[:, [0, 1, 2, 3, 4]]
                 param_names = ['eps_xx', 'eps_xy', 'eps_yy', 'eps_xz', 'eps_yz']
                 if i==1: logger.info(f"{epsilon}33 is set to zero")
             elif num_strain_components == 3:
-                F = F_all[:, [0, 1, 2]]
+                F_fit = F_all_masked[:, [0, 1, 2]]
+                F_model = F_all_full[:, [0, 1, 2]]
                 param_names = ['eps_xx', 'eps_xy', 'eps_yy']
                 if i==1: logger.info(f"{epsilon}13, {epsilon}23, & {epsilon}33 are set to zero")
             else: 
@@ -672,8 +703,8 @@ def fit_lattice_cone_distortion(q_data, q_errors, q0_chi_data, initial_q_guesses
                 param_names = ['eps_xx', 'eps_xy', 'eps_yy']
                 if i==1: logger.warning(f"An incompatible number of strain components was selected. The only valid numbers are 3 (biaxial), 5 (biaxial w/ shear) & 6 (full strain tensor). Defaulting to biaxial.")
 
-            # --- Perform WLS fit and process results ---
-            wls_model = sm.WLS(y_meas, F, weights=weights)
+            # --- Perform WLS fit ---
+            wls_model = sm.WLS(y_meas, F_fit, weights=weights)
             results = wls_model.fit()
             
             # Filter out poor fits based on the R-squared value
@@ -689,8 +720,13 @@ def fit_lattice_cone_distortion(q_data, q_errors, q0_chi_data, initial_q_guesses
             full_params['q0'] = np.mean(q0_masked)
             full_params.update(params)
             full_params.update(errors)
-            
             strain_params.append(full_params)
+
+            # --- Generate and save fitted q(chi) curve ---
+            fitted_params = results.params
+            eps_fit_full = F_model @ fitted_params
+            q_fit_full = q0_vals_full / np.exp(eps_fit_full)
+            q_fit_vs_chi_list.append(q_fit_full)
 
             if plot:
                 ax = axes[i]
@@ -699,11 +735,12 @@ def fit_lattice_cone_distortion(q_data, q_errors, q0_chi_data, initial_q_guesses
                 ax.set_ylabel(f'{epsilon}=ln(q₀/q)')
                 ax.set_title(f'Ring {i+1} (q₀ = {q0_fixed:.4f} nm⁻¹)')
                 ax.legend(fontsize='small', loc='lower left', bbox_to_anchor=(1.02, 0.02))
+        
         except (ValueError, np.linalg.LinAlgError):
             if plot:
                 axes[i].set_title(f"Ring {i+1} (q₀ = {q0_fixed:.4f} nm⁻¹): fit failed"); axes[i].axis('off')
             strain_params.append(nan_dict.copy())
-            fit_vs_chi.append(np.full(n_bins, np.nan))
+            q_fit_vs_chi_list.append(np.full(n_bins, np.nan)) # Add NaNs for failed filt
             logger.exception(f"Fit failed for Ring {i+1}")
 
     if plot:
@@ -735,6 +772,13 @@ def fit_lattice_cone_distortion(q_data, q_errors, q0_chi_data, initial_q_guesses
     np.savetxt(strain_vs_chi_path, strain_vs_chi, fmt="%.6e", delimiter="\t",
                header="Rows = diffraction rings; Columns = azimuthal bins (strain vs chi data)")
     logger.info(f"Strain vs chi centroid data saved to: {strain_vs_chi_path}")
+
+    # Save the fitted q0(chi) reference data
+    q_fit_vs_chi = np.array(q_fit_vs_chi_list)
+    q_fit_vs_chi_path = os.path.join(output_dir, "q0_vs_chi_FITTED.txt")
+    np.savetxt(q_fit_vs_chi_path, q_fit_vs_chi, fmt="%.6e", delimiter="\t",
+               header="Rows = diffraction rings; Columns = azimuthal bins (FITTED q0(chi) from strain model)")
+    logger.info(f"Fitted q0(chi) reference data saved to: {q_fit_vs_chi_path}")
 
     return strain_params, strain_list, q0_list_out, strain_vs_chi_path
 
@@ -801,7 +845,8 @@ def generate_strain_maps_from_json(
     dpi=600,
     map_name_pfx="strain-map_",
     logger=None,
-    num_strain_components=3
+    num_strain_components=3,
+    colorbar_bins=11,
 ):
     """
     Generates and saves strain maps from a JSON file containing strain tensor data.
@@ -907,8 +952,9 @@ def generate_strain_maps_from_json(
         win_idx1 = min(n_cols, int(np.ceil((x_max_win_shifted - startX) / col_step)))
         logger.info(f"Error metrics will be calculated based on the window defined by columns {win_idx0} to {win_idx1}.")
 
+    colorbar_bins=colorbar_bins
     # --- Plotting Function ---
-    def plot_and_save(data, title, filename):
+    def plot_and_save(data, title, filename, colorbar_bins):
         data = np.flipud(data)
 
         fig, ax = plt.subplots(figsize=(3.5, 4), dpi=dpi)
@@ -968,7 +1014,7 @@ def generate_strain_maps_from_json(
             cb = fig.colorbar(sm, ax=ax, shrink=0.8, pad=0.05)
             cb.set_label('Microstrain [με]')
             cb.formatter = FuncFormatter(lambda x, _: f"{(x * 1e6):.0f}")
-            cb.locator = mticker.MaxNLocator(nbins=9)
+            cb.locator = mticker.MaxNLocator(nbins=colorbar_bins)
             cb.update_ticks()
 
             ax.set_title(title)
@@ -989,7 +1035,7 @@ def generate_strain_maps_from_json(
             data_map = strain_array[:, :, index]
             title = f"{title_latex} (Ring {ring_index + 1})"
             filename = f"{map_name_pfx}_{name}_ring{ring_index + 1}.png"
-            plot_and_save(data_map, title, filename)
+            plot_and_save(data_map, title, filename, colorbar_bins)
         
         eps_xx = strain_array[:,:,0] if 'xx' in components_to_plot else 0.0
         eps_xy = strain_array[:,:,1] if 'xy' in components_to_plot else 0.0
@@ -1002,7 +1048,7 @@ def generate_strain_maps_from_json(
         vm_strain = np.sqrt(((eps_xx - eps_yy)**2 + (eps_yy - eps_zz)**2 + (eps_zz - eps_xx)**2) / 2 + 3 * (eps_xy**2 + eps_xz**2 + eps_yz**2))
         title_vm = f"$\\varepsilon_{{VM}}$ (Ring {ring_index + 1})"
         filename_vm = f"{map_name_pfx}_Mises_ring{ring_index + 1}.png"
-        plot_and_save(vm_strain, title_vm, filename_vm)
+        plot_and_save(vm_strain, title_vm, filename_vm, colorbar_bins)
 
     # Plot maps for each ring in parallel
     Parallel(n_jobs=-1)(delayed(_plot_one_ring)(i, filtered_values[i], filtered_errors[i]) for i in range(num_rings))
@@ -1084,7 +1130,7 @@ def generate_strain_maps_from_json(
             name = comp['name']
             latex_title = comp['latex']
             filename = f"{map_name_pfx}_{name}_avg.png"
-            plot_and_save(avg_maps[name], f"{latex_title} (Avg)", filename)
+            plot_and_save(avg_maps[name], f"{latex_title} (Avg)", filename, colorbar_bins)
         
         vm_title = 'Strain_VM (Avg)'
         vm_title_latex = r'$\varepsilon_{VM}$ (Avg)'
@@ -1120,7 +1166,7 @@ def generate_strain_maps_from_json(
 
         calculate_and_log_map_error_metrics(avg_vm_strain_subset, avg_vm_error_subset, map_name_for_calc, logger, file_handle=f)
 
-        plot_and_save(avg_vm_strain, vm_title_latex, f"{map_name_pfx}_Mises_avg.png")
+        plot_and_save(avg_vm_strain, vm_title_latex, f"{map_name_pfx}_Mises_avg.png", colorbar_bins)
 
     logger.info("Averaged maps plotted and error summary file saved.")
 

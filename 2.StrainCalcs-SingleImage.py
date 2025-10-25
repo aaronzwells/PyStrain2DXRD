@@ -34,7 +34,7 @@ def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tenso
     start_time = time.time()
     poni_file     = "calibration/Calibration_LaB6_100x100_3s_r8_mod2.poni"
     q0_reference_file = None #"ValidationOutputFiles/VB-APS-SSAO-6_25C_Map-AO_000304/q_vs_chi_peaks.txt"
-    tif_file      = tif_override or "InputFiles/Reference_0Strain_inputs/VB-APS-SSAO-6_30C_cool_Map-AO_001474.avg.tiff"
+    tif_file      = tif_override or "InputFiles/Reference_0Strain_inputs/VB-APS-SSAO-6_25C_Map-AO_000304.avg.tiff"
     save_chi_files = False # this determines whether every q vs chi bin dataset is saved as a separate file or if the file writing is skipped
     save_adjusted_tif = False
     mask_thresh   = 4e2 # threshold value for the image mask
@@ -45,14 +45,14 @@ def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tenso
     wavelength_nm = 0.1729786687 # [nm] X-ray wavelength
     solved_strain_components = 5 # This is the number of strain components to solve for in the system. # 3 = biaxial; 5 = biaxial w/ shear; 6 = all components
     initial_q_guesses = [
-                17.959886,
-                24.497447,
-                26.268024,
-                29.970841,
-                35.922285,
-                39.032558,
-                44.507226,
-                45.509875
+                17.961188,
+                24.500613,
+                26.267830,
+                29.974002,
+                35.926353,
+                39.034769,
+                44.513621,
+                45.514461
             ]
      
     tol_array   = np.array([ # tolerance values for q when searching for a peak to fit [nm^-1] for calibrant

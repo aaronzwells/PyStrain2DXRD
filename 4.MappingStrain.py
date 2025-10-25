@@ -5,9 +5,9 @@ import time
 
 def map_strain():
     # --- User-Defined Inputs ---
-    json_path = "OutputData/OutputFiles_Data_VB-APS-SSAO-6_25C_2025.10.22-21.54.52/strain_tensor_summary.json"
+    json_path = "OutputData/OutputFiles_Data_VB-APS-SSAO-6_25C_2025.10.24-17.38.47/strain_tensor_summary.json"
     sample_name = "VB-APS-SSAO-6_25C"
-    solved_strain_components = 6 # 3 = biaxial; 5 = biaxial w/ shear; 6 = all components
+    solved_strain_components = 5 # 3 = biaxial; 5 = biaxial w/ shear; 6 = all components
     
     # Define the geometric and measurement parameters for mapping
     n_steps_x = 8      # Number of measurement points in the X direction (columns)
@@ -20,7 +20,8 @@ def map_strain():
     map_offset_xy = (-0.15, -start_xy[1]+pixel_size_map[1]/2) # vector for shifting the map data
     trim_edges = True # allows the user to trim the pixels left and down from the translated (0,0)
     color_limit_window = (0.2, 0.8) # Sets the x-range (in mm) used to determine the color scale limits
-    colorbar_scale = None #(-3.5e-04, 4e-04) # Sets the scale of strain; if default scale is desired: None
+    colorbar_scale = (-4.50e-04, 5.50e-04) # Sets the scale of strain; if default scale is desired: None
+    colorbar_bins = 11 # sets the number of labels on the colorbar
     title_and_labels = True # Toggles whether the plot title, axis titles, and colorbar legend display
 
     # --- Script Execution ---
@@ -61,7 +62,9 @@ def map_strain():
         output_dir=output_directory,
         dpi=600,
         map_name_pfx=map_name_pfx,
-        num_strain_components=solved_strain_components)
+        num_strain_components=solved_strain_components,
+        colorbar_bins=colorbar_bins
+    )
 
 if __name__ == "__main__":
     map_strain()
