@@ -1,63 +1,124 @@
+# Analysis_pyFAI Documentation
 These are the instructions for the workflow provided in this git repository. Please read all the way to the bottom before using the scripts the first time. 
 
->[!IMPORTANT]
->This workflow does require an installation of PyFAI with the additional libraries added to the  original requirements.txt file for PyFAI. This revised requirements.txt file can be found at  `*/Analysis_pyFAI/pyFAI/requirements.txt`. 
+# Installation Instructions
+>[!NOTE]
+>This repository automatically installs the pyFAI library using pip
+>For more information about this powerful library, see the [pyFAI documentation](https://pyfai.readthedocs.io/en/stable/index.html)
 
+Below are the instructions to install the pyFAI library and all other required libraries for this workflow:
 >[!TIP]
->It is also **HIGHLY** recommended to run this workflow within its own Python virtual  environment. Please see [this link](https://docs.python.org/3/tutorial/venv.html) to learn more  about virtual environments, or look them up online. There are lots of useful resources on the  topic.
+>It is also **HIGHLY** recommended to run this workflow within its own Python virtual environment. Please see [this link](https://docs.python.org/3/tutorial/venv.html) to learn more about virtual environments, or look them up online. There are lots of useful resources on the topic.
+
+## MacOS/Linux
+1. Open a terminal session
+2. Navigate to the parent directory into which you want to clone the repository
+ ```
+ cd /path/to/parent/directory
+ ```
+3. Clone the git repository
+ ```
+ git clone https://github.com/aaronzwells/Analysis_pyFAI.git
+ ```
+4. Go to the cloned repository
+ ```
+ cd Analysis_pyFAI
+ ```
+5. Create the virtual environment
+ ```
+ python3 -m venv .venv
+ ```
+6. Activate the virtual environment associated with the repository
+ ```
+ source .venv/bin/activate
+ ```
+7. Install the required packages
+ ```
+ pip install -r pyFAI/requirements.txt
+ ```
+## Windows
+1. Open Command Prompt or PowerShell
+2. Navigate to the parent directory
+ ```
+ cd C:\path\to\parent\directory
+ ```
+3. Clone the git repository
+ ```
+ git clone https://github.com/aaronzwells/Analysis_pyFAI.git
+ ```
+4. Go to the cloned repository
+ ```
+ cd Analysis_pyFAI
+ ```
+5. Create the virtual environment
+ ```
+ python -m venv .venv
+ ```
+6. Activate the virtual environment
+ ```
+ .venv\Scripts\activate
+ ```
+7. Install the required packages
+ ```
+ pip install -r pyFAI\requirements.txt
+ ```
 
 # OVERVIEW OF DIRECTORIES
 
 ## PARENT DIRECTORY
 
-**Analysis_pyFAI/** is the main directory where all inputs and output subdirectories are  located, as well as the script files (*.py). 
+**Analysis_pyFAI/** is the main directory where all inputs and output subdirectories are located, as well as the script files (*.py). 
 
-## MAIN DIRECTORIES
+## USER DIRECTORIES
 
-**pyFAI/** is the directory where the pyFAI program is installed. For details on this  installation see the [PyFAI Documentation](https://pyfai.readthedocs.io/en/stable/index.html)  page.
+**InputFiles/** is the directory where all user-provided input images are housed. It is **_not included_ in the git repository**, and should be created by the user. It was excluded due to the size of the folders.
 
-**AdditionalFiles/** is the directory that houses extraneous data; it is primarily used for  `ValidationScript.py`
+__OutputData/OutputFiles*/__ directories are generated automatically during script generation. These are named with the following format: "OutputFiles\_\<kind_of_output\>\_\<sample_name\>\_\<date_and_time\>"
 
-**calibration/** is the directory where pyFAI calibration data should be stored. (The user is  responsible for storing the data here. It does not auto-save to this directory.) This data  includes *<ins>all</ins> .npt, .poni, .json files* related to calibration. It is also  recommended that *.tif* calibration images be saved to this folder, as it is a convenient way  to keep everything nicely contained.
+**OutputMaps_*/** directories are created to house the final stress and strain maps. Each map directory is time stamped and uses the above ^^ naming convention.
 
-**InputFiles/** is the directory where all input images are housed. It is **_not included_ in  the git repository**, and should be created by the user. It was excluded due to the size of the  folders.
+**PeakFinding/** is where the reference peak data is stored after running 1.FindingRefPeaks.py
 
-## SECONDARY DIRECTORIES
+**ValidationOutputFiles/** is where the data from 2.StrainCalc-SingleImage.py are saved
 
-**OldScripts/** is the directory that houses early revisions or editions of the scripts in this  workflow. Most are obsolete, but may be useful in certain scenarios.
+**calibration/** is the directory where pyFAI calibration data should be stored. (The user is responsible for storing the data here. It does not auto-save to this directory.) This data includes *<ins>all</ins> .npt, .poni, .json files* related to calibration. It is also recommended that *.tif* calibration images be saved to this folder, as it is a convenient way to keep everything nicely contained.
 
-**ValidationOutputFiles/** is the directory that houses the output data from the validation  process, including all runs from `1.GettingPeakLocs.py` & `2.MainPipeline-noBatch.py`
+## AUXILIARY DIRECTORIES
 
-## SCRIPT-GENERATED DIRECTORIES
+**pyFAI/** is the directory where the pyFAI program is installed. For details on this installation see the [PyFAI Documentation](https://pyfai.readthedocs.io/en/stable/index.html) page.
 
-**__pycache__/** is a folder that houses all cached data from the batch processing steps. There  is no need for the user to ever interact with this directory as it is auto-generated.
-
-__OutputFiles*/__ directories are generated automatically during script generation. These are named  with the following format:  "OutputFiles\_\<kind_of_output\>\_\<input_file_name\>\_\<date_and_time\>"
+**__pycache__/** is a folder that houses all cached data from the batch processing steps. There is no need for the user to ever interact with this directory as it is auto-generated.
 
 # WORKFLOW OVERVIEW
 
-Before executing the workflow, ValidationScript.py can be used to run the peak fitting math.   This is useful for ensuring the peaks are being correctly fit to given input data.  *FunctionLibrary.py* contains all the functions used and called in the below scripts. 
+Before executing the workflow, ValidationScript.py can be used to run the peak fitting math.  This is useful for ensuring the peaks are being correctly fit to given input data. *FunctionLibrary.py* contains all the functions used and called in the below scripts. 
 
 >[!NOTE]
 >The main workflow scripts are numbered and may be referred to as "*Script 1*", "*Script 2*", etc.
 
-## WORKFLOW OUTLINE/SUMMARY
+## WORKFLOW OUTLINE & SUMMARY
 
-1. The first true workflow script is `1.GettingPeakLocs.py`. This script allows the user to  input their calibration *.poni* file and a representative *.tif* or *.tiff* file and have PyFAI  determine good initial guesses for the first 9 peaks. It then outputs this data to a folder,  named after your input file, within the `ValidationOutputFiles/PeakFinding/` directory. 
+>[!CAUTION]
+>This section needs to be rewritten to reflect recent updates.
 
-2. The second workflow script is `2.MainPipeline-noBatch.py`. This script allows the user to  test their initial guesses from *Script 1* by adjusting the values in the  `initial_q_guesses` and (if necessary) `tol_array` variables. The user should also update the  calibration and *.tif* file paths. 
+1. The first true workflow script is `1.GettingPeakLocs.py`. This script allows the user to input their calibration *.poni* file and a representative *.tif* or *.tiff* file and have PyFAI determine good initial guesses for the first 9 peaks. It then outputs this data to a folder, named after your input file, within the `ValidationOutputFiles/PeakFinding/` directory. 
+
+2. The second workflow script is `2.MainPipeline-noBatch.py`. This script allows the user to test their initial guesses from *Script 1* by adjusting the values in the `initial_q_guesses` and (if necessary) `tol_array` variables. The user should also update the calibration and *.tif* file paths. 
 
 >[!TIP]
->Using relative paths when updating script variables is <ins>accepted and encouraged</ins> to  keep the main directory organized. 
+>Using relative paths when updating script variables is <ins>accepted and encouraged</ins> to keep the main directory organized. 
 
-3. The third workflow script is 3.MainPipeline-BatchProcess.py. This script is the main data  analysis script. It requires the same inputs as *Script 2*, though the input  should simply be the path to directory where the images for analysis will be held. This script  will output a significant amount of data housed in an `OutputFiles_Data_*/` directory matching  the **user-defined** sample name prefix in the variable called `SampleName`. 
+3. The third workflow script is 3.MainPipeline-BatchProcess.py. This script is the main data analysis script. It requires the same inputs as *Script 2*, though the input should simply be the path to directory where the images for analysis will be held. This script will output a significant amount of data housed in an `OutputFiles_Data_*/` directory matching the **user-defined** sample name prefix in the variable called `SampleName`. 
 
-4. The final workflow script is either `4a.MappingStrain-Continuous.py` or  `4b.MappingStrain-nonContinuous.py`. These two scripts map the strain based upon  the generated data from *Script 3*. The outputs are saved to an output directory using the same  naming conventions as the outputs from *Script 3*. 
+4. The final workflow script is either `4a.MappingStrain-Continuous.py` or `4b.MappingStrain-nonContinuous.py`. These two scripts map the strain based upon the generated data from *Script 3*. The outputs are saved to an output directory using the same naming conventions as the outputs from *Script 3*. 
 
 >[!CAUTION]
 >*Script 4b* has not been completed yet. Do not use until finalized.
 
 ## REQUIRED USER-DEFINED VARIABLES
+
+>[!CAUTION]
+>This section needs to be rewritten to reflect recent updates.
 
 >[!NOTE]
 >See the comments in the code for a definition of each variable

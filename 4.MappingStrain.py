@@ -5,22 +5,23 @@ import time
 
 def map_strain():
     # --- User-Defined Inputs ---
-    json_path = "OutputData/OutputFiles_Data_VB-APS-SSAO-6_30C_cool_2025.10.13-13.35.52/strain_tensor_summary.json"
-    sample_name = "VB-APS-SSAO-6_30C_cool"
+    json_path = "OutputData/OutputFiles_Data_VB-APS-SSAO-6_25C_2025.10.24-17.38.47/strain_tensor_summary.json"
+    sample_name = "VB-APS-SSAO-6_25C"
     solved_strain_components = 5 # 3 = biaxial; 5 = biaxial w/ shear; 6 = all components
     
     # Define the geometric and measurement parameters for mapping
-    n_steps_x = 4      # Number of measurement points in the X direction (columns)
-    n_steps_y = 21     # Number of measurement points in the Y direction (rows)
-    dX = 0.2           # Center-to-center distance in X (mm)
-    dY = 0.05         # Center-to-center distance in Y (mm)
-    pixel_size_map = (0.1, 0.05) # Define the size of each colored pixel in the heatmap (width, height) in mm
+    n_steps_x = 8      # Number of measurement points in the X direction (columns)
+    n_steps_y = 44     # Number of measurement points in the Y direction (rows)
+    dX = 0.1           # Center-to-center distance in X (mm)
+    dY = 0.025         # Center-to-center distance in Y (mm)
+    pixel_size_map = (0.1, 0.025) # Define the size of each colored pixel in the heatmap (width, height) in mm
     start_xy = (0.0, 1.0) # Physical starting coordinate (center of the top-left pixel); (startX, startY) in mm
     gap_mm = None # If an additional gap is added between scanned columns, define it here. Usually this is "None"
-    map_offset_xy = (-0.05, -start_xy[1]+pixel_size_map[1]/2) # vector for shifting the map data
+    map_offset_xy = (-0.15, -start_xy[1]+pixel_size_map[1]/2) # vector for shifting the map data
     trim_edges = True # allows the user to trim the pixels left and down from the translated (0,0)
     color_limit_window = (0.2, 0.8) # Sets the x-range (in mm) used to determine the color scale limits
-    colorbar_scale = (-3.5e-04, 4e-04) # Sets the scale of strain; if default scale is desired: None
+    colorbar_scale = (-4.50e-04, 5.50e-04) # Sets the scale of strain; if default scale is desired: None
+    colorbar_bins = 11 # sets the number of labels on the colorbar
     title_and_labels = True # Toggles whether the plot title, axis titles, and colorbar legend display
 
     # --- Script Execution ---
@@ -61,7 +62,9 @@ def map_strain():
         output_dir=output_directory,
         dpi=600,
         map_name_pfx=map_name_pfx,
-        num_strain_components=solved_strain_components)
+        num_strain_components=solved_strain_components,
+        colorbar_bins=colorbar_bins
+    )
 
 if __name__ == "__main__":
     map_strain()

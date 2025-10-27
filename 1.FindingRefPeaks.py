@@ -7,7 +7,11 @@ import fabio
 import os
 
 poni_file = "calibration/Calibration_LaB6_100x100_3s_r8_mod2.poni" # calibration PONI file
+<<<<<<< HEAD
 tif_file = "InputFiles/VB-APS-SSAO-6_25C_TestMap-AO_000288.avg.tiff" # representative data TIF file
+=======
+tif_file = "InputFiles/25C_AO_inputs/VB-APS-SSAO-6_25C_Map-AO_000288.avg.tiff" # representative data TIF file
+>>>>>>> origin
 
 def main(
         poni_file=poni_file, 
