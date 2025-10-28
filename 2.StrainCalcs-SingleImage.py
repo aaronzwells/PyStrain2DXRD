@@ -34,10 +34,11 @@ def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tenso
     start_time = time.time()
     poni_file     = "calibration/Calibration_LaB6_100x100_3s_r8_mod2.poni"
     q0_reference_file = None #"ValidationOutputFiles/VB-APS-SSAO-6_25C_Map-AO_000304/q_vs_chi_peaks.txt"
-    tif_file      = tif_override or "InputFiles/Reference_0Strain_inputs/VB-APS-SSAO-6_25C_Map-AO_000304.avg.tiff"
+    tif_file      = "InputFiles/Reference_0Strain_inputs/VB-APS-SSAO-6_25C_Map-AO_000304.avg.tiff"
+    mask_file     = None # Either "path/to/your/mask.tif" or None
     save_chi_files = False # this determines whether every q vs chi bin dataset is saved as a separate file or if the file writing is skipped
     save_adjusted_tif = False
-    mask_thresh   = 4e2 # threshold value for the image mask
+    mask_thresh   = 4e2 # minimum threshold value for the image mask
     num_azim_bins = 120 # number of azimuthal bins around the data
     q_min_nm1     = 14.0 # q_0 for binning of the data
     npt_rad       = 2048 # number of radial bins (~2-3x the radial pixel count)
@@ -83,6 +84,7 @@ def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tenso
         poni_file,
         tif_file,
         output_path=output_path,
+        mask_file=mask_file,
         mask_threshold=mask_thresh,
         logger=file_logger,
         save_adjusted_tif=save_adjusted_tif)

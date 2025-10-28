@@ -175,7 +175,7 @@ def pseudo_voigt(x, amp, cen, wid, eta, bg_const): # bg_slope
     return eta * lorentz + (1 - eta) * gauss + background
 
 # --- PyFAI data loading & integration -----------------------------------
-def load_integrator_and_data(poni_path, tif_path, output_path, ref_tif_path=None, mask_threshold=4e2, logger=None, save_adjusted_tif=True):
+def load_integrator_and_data(poni_path, tif_path, output_path, mask_file=None, ref_tif_path=None, mask_threshold=4e2, logger=None, save_adjusted_tif=True):
     """
     Load/initialize PyFAI integrator and adjust a 2D XRD image using an auto-CB 
     scheme from ImageJ. Saves the adjusted image.
@@ -187,26 +187,27 @@ def load_integrator_and_data(poni_path, tif_path, output_path, ref_tif_path=None
         poni_path (str): Path to the pyFAI calibration file (.poni).
         tif_path (str): Path to the input TIFF image.
         output_path (str): Directory to save the adjusted image.
+        mask_file (str, optional): Path to an external mask file (e.g., .tif, .npy). 
+                                   In the mask file, 0 or False = BAD (masked), 1 or True = GOOD. Defaults to None.
         ref_tif_path (str, optional): Unused. Defaults to None.
         mask_threshold (float, optional): Unused. Defaults to 4e2.
         logger (logging.Logger, optional): Logger for status messages. Defaults to None.
 
     Returns:
         tuple: A tuple containing (ai, data_adj, mask), where `ai` is the AzimuthalIntegrator,
-               `data_adj` is the contrast-adjusted image data, and `mask` is None.
+               `data_adj` is the contrast-adjusted image data, and `mask` is the 
+               boolean mask array (True = masked/bad).
     """
+    logger = logger or logging.getLogger(__name__)    
+    
     # Load calibrant and raw image
     ai  = pyFAI.load(poni_path)
     img = fabio.open(tif_path)
     data = img.data.astype(np.float32)
 
     # Contrast adjustment using ImageJ-style autocontrast (wider dynamic range)
-    data_adj_float = imagej_autocontrast(data, k=3.0)
+    data_adj = imagej_autocontrast(data, k=3.0)
 
-    # Keep data as float32 for pyFAI processing
-    data_adj = data_adj_float
-
-    logger = logger or logging.getLogger(__name__)
     if save_adjusted_tif:
         # Save adjusted TIF alongside the original
         base, ext = os.path.splitext(tif_path)
@@ -217,10 +218,39 @@ def load_integrator_and_data(poni_path, tif_path, output_path, ref_tif_path=None
     else:
         logger.info(f"Adjusted image not saved.")
 
-    # This function does not compute a mask; it returns None.
-    return ai, data_adj, None
+    # --- Masking Logic ---
+    final_mask = None
 
-def load_and_prep_image(tif_path, output_path, mask_threshold=4e2, logger=None, save_adjusted_tif=True):
+    # 1. Load external mask file
+    if mask_file and os.path.exists(mask_file):
+        try:
+            mask_data = fabio.open(mask_file).data
+            # Standard mask file convention: 1 = good, 0 = bad.
+            # pyFAI mask convention: True = bad, False = good.
+            final_mask = (mask_data == 0) 
+            logger.info(f"Successfully loaded external mask from: {mask_file}")
+        except Exception as e:
+            logger.warning(f"Failed to load mask file {mask_file}: {e}. No external mask applied.")
+
+    # 2. Apply threshold mask (hot pixels)
+    if mask_threshold is not None:
+        # Mask pixels *below* the threshold
+        threshold_mask = data < mask_threshold
+        logger.info(f"Generated threshold mask for intensity < {mask_threshold}")
+        
+        if final_mask is not None:
+            # Combine masks (pixel is bad if in *either* mask)
+            final_mask = final_mask | threshold_mask
+            logger.info("Combined external mask and threshold mask.")
+        else:
+            final_mask = threshold_mask
+    
+    if final_mask is None:
+        logger.info("No mask was applied.")
+
+    return ai, data_adj, final_mask
+
+def load_and_prep_image(tif_path, output_path, mask_file=None, mask_threshold=4e2, logger=None, save_adjusted_tif=True):
     """
     Loads and prepares a single TIFF image for integration.
 
@@ -230,12 +260,15 @@ def load_and_prep_image(tif_path, output_path, mask_threshold=4e2, logger=None, 
     Args:
         tif_path (str): Path to the input TIFF image.
         output_path (str): Directory to save the adjusted image.
+        mask_file (str, optional): Path to an external mask file (e.g., .tif, .npy). 
+                                   In the mask file, 0 or False = BAD (masked), 1 or True = GOOD.
         mask_threshold (float, optional): Unused. Defaults to 4e2.
         logger (logging.Logger, optional): Logger for status messages. Defaults to None.
 
     Returns:
         tuple: A tuple containing (data_adj, mask), where `data_adj` is the
-               contrast-adjusted image data, and `mask` is None.
+               contrast-adjusted image data, and `mask` is the boolean mask array
+               (True = masked/bad).
     """
     logger = logger or logging.getLogger(__name__)
 
@@ -254,9 +287,37 @@ def load_and_prep_image(tif_path, output_path, mask_threshold=4e2, logger=None, 
     else: 
         logger.info(f"Adjusted image not saved.")
 
+    # --- Masking Logic ---
+    final_mask = None
 
-    # This function does not compute a mask; it returns None.
-    return data_adj, None
+    # 1. Load external mask file
+    if mask_file and os.path.exists(mask_file):
+        try:
+            mask_data = fabio.open(mask_file).data
+            # Standard mask file convention: 1 = good, 0 = bad.
+            # pyFAI mask convention: True = bad, False = good.
+            final_mask = (mask_data == 0) 
+            logger.info(f"Successfully loaded external mask from: {mask_file}")
+        except Exception as e:
+            logger.warning(f"Failed to load mask file {mask_file}: {e}. No external mask applied.")
+
+    # 2. Apply threshold mask (hot pixels)
+    if mask_threshold is not None:
+        # Mask pixels *above* the threshold
+        threshold_mask = data > mask_threshold
+        logger.info(f"Generated threshold mask for intensity > {mask_threshold}")
+        
+        if final_mask is not None:
+            # Combine masks (pixel is bad if in *either* mask)
+            final_mask = final_mask | threshold_mask
+            logger.info("Combined external mask and threshold mask.")
+        else:
+            final_mask = threshold_mask
+    
+    if final_mask is None:
+        logger.info("No mask was applied.")
+
+    return data_adj, final_mask
 
 def integrate_2d(ai, data, mask, num_azim_bins=360, q_min=16.0, npt_rad=5000, output_dir=None, save_chi_files=False, logger=None):
     """

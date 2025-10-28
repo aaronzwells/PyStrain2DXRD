@@ -50,6 +50,7 @@ def batch_main_pipeline(config):
         try:
             # Initialization of user-defined variables
             poni_file = config['poni_file']
+            mask_file = config['mask_file']
             save_chi_files = config['save_chi_files']
             plot_q_vs_chi = config['plot_q_vs_chi']
             plot_strain_vs_chi = config['plot_strain_vs_chi']
@@ -75,6 +76,7 @@ def batch_main_pipeline(config):
             data, mask = fl.load_and_prep_image( # loads and masks the TIFF for analysis
                 tif_file,
                 output_path=output_path,
+                mask_file=mask_file,
                 mask_threshold=mask_thresh,
                 logger=file_logger,
                 save_adjusted_tif=save_adjusted_tif
@@ -206,12 +208,13 @@ if __name__ == "__main__":
         'sampleName': "VB-APS-SSAO-6_25C", # name used to create output data files
         'poni_file': "calibration/Calibration_LaB6_100x100_3s_r8_mod2.poni", # calibration file path
         'q0_reference_file': "ValidationOutputFiles/VB-APS-SSAO-6_25C_Map-AO_000304/q0_vs_chi_FITTED.txt", # q0 reference file path
+        'mask_file': None, # Set to "path/to/your/mask.tif" to use a mask
         'save_chi_files': False, # toggles saving the azimuthal q data for each bin
         'plot_q_vs_chi': False, # toggles plotting q vs chi plots
         'plot_strain_vs_chi': False, # toggles plotting unfitted strain vs chi plots
         'save_adjusted_tif': False, # toggles saving the adjusted TIF files
         'num_jobs_parallel': -2, # Uses all cores except for 1 to perform parallel calculations (-1 indicates using the maximum number of cores)
-        'mask_thresh': 4e2, # mask threshold for pixels; not used unless chosen; can be left at 4e2
+        'mask_thresh': 4e2, # mask minimum threshold for pixels; not used unless chosen; can be left at 4e2
         'num_azim_bins': 120, # number of azimuthal bins for averaging the peaks
         'q_min_nm1': 14.0, # minimum q value for radial integration
         'npt_rad': 3000, # number of radial points from which to calculate peak centroids; ~2-3x radial pixel count
