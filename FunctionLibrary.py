@@ -188,7 +188,7 @@ def load_integrator_and_data(poni_path, tif_path, output_path, mask_file=None, r
         tif_path (str): Path to the input TIFF image.
         output_path (str): Directory to save the adjusted image.
         mask_file (str, optional): Path to an external mask file (e.g., .tif, .npy). 
-                                   In the mask file, 0 or False = BAD (masked), 1 or True = GOOD. Defaults to None.
+                                   In the mask file, 0 or False = GOOD (unmasked), 1 or True = BAD (masked).
         ref_tif_path (str, optional): Unused. Defaults to None.
         mask_threshold (float, optional): Unused. Defaults to 4e2.
         logger (logging.Logger, optional): Logger for status messages. Defaults to None.
@@ -225,9 +225,9 @@ def load_integrator_and_data(poni_path, tif_path, output_path, mask_file=None, r
     if mask_file and os.path.exists(mask_file):
         try:
             mask_data = fabio.open(mask_file).data
-            # Standard mask file convention: 1 = good, 0 = bad.
-            # pyFAI mask convention: True = bad, False = good.
-            final_mask = (mask_data == 0) 
+            # Standard mask file convention: 1 = bad pixel, 0 = good pixel.
+            # pyFAI mask convention: True = bad pixel, False = good pixel.
+            final_mask = (mask_data == 1) 
             logger.info(f"Successfully loaded external mask from: {mask_file}")
         except Exception as e:
             logger.warning(f"Failed to load mask file {mask_file}: {e}. No external mask applied.")
@@ -261,7 +261,7 @@ def load_and_prep_image(tif_path, output_path, mask_file=None, mask_threshold=4e
         tif_path (str): Path to the input TIFF image.
         output_path (str): Directory to save the adjusted image.
         mask_file (str, optional): Path to an external mask file (e.g., .tif, .npy). 
-                                   In the mask file, 0 or False = BAD (masked), 1 or True = GOOD.
+                                   In the mask file, 0 or False = GOOD (unmasked), 1 or True = BAD (masked).
         mask_threshold (float, optional): Unused. Defaults to 4e2.
         logger (logging.Logger, optional): Logger for status messages. Defaults to None.
 
@@ -294,9 +294,9 @@ def load_and_prep_image(tif_path, output_path, mask_file=None, mask_threshold=4e
     if mask_file and os.path.exists(mask_file):
         try:
             mask_data = fabio.open(mask_file).data
-            # Standard mask file convention: 1 = good, 0 = bad.
+            # Standard mask file convention: 1 = bad, 0 = good.
             # pyFAI mask convention: True = bad, False = good.
-            final_mask = (mask_data == 0) 
+            final_mask = (mask_data == 1) 
             logger.info(f"Successfully loaded external mask from: {mask_file}")
         except Exception as e:
             logger.warning(f"Failed to load mask file {mask_file}: {e}. No external mask applied.")
