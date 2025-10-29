@@ -235,7 +235,7 @@ def load_integrator_and_data(poni_path, tif_path, output_path, mask_file=None, r
     # 2. Apply threshold mask (hot pixels)
     if mask_threshold is not None:
         # Mask pixels *below* the threshold
-        threshold_mask = data < mask_threshold
+        threshold_mask = data > mask_threshold
         logger.info(f"Generated threshold mask for intensity < {mask_threshold}")
         
         if final_mask is not None:
@@ -577,7 +577,8 @@ def plot_strain_vs_chi_stacked(file_path, output_dir=None, chi_deg=None, dpi=600
 
 # --- Compute full strain tensor ----------------------------------------
 def fit_lattice_cone_distortion(q_data, q_errors, q0_chi_data, initial_q_guesses, wavelength_nm,
-                                chi_deg=None, psi_deg=None, phi_deg=None, omega_deg=None, num_strain_components=3, output_dir=None, dpi=600, plot=True, logger=None, min_rsquared=0.0):
+                                chi_deg=None, psi_deg=None, phi_deg=None, omega_deg=None, num_strain_components=3, MAD_threshold=8.0,
+                                output_dir=None, dpi=600, plot=True, logger=None, min_rsquared=0.0):
     """
     Fits a lattice cone distortion model to q(χ) data to extract strain tensor components.
 
@@ -686,7 +687,7 @@ def fit_lattice_cone_distortion(q_data, q_errors, q0_chi_data, initial_q_guesses
             median_q = np.median(y)
             abs_deviation = np.abs(y - median_q)
             mad = np.median(abs_deviation)
-            threshold = 8.0 * mad # Define the outlier threshold (3.0 is a good starting point)
+            threshold = MAD_threshold * mad # Define the outlier threshold (3.0 is a good starting point)
             outlier_mask = abs_deviation < threshold # Keep only the points within the threshold
             num_outliers = len(y) - np.sum(outlier_mask) # Log how many points were removed
             if num_outliers > 0:
@@ -900,6 +901,8 @@ def generate_strain_maps_from_json(
     color_limit_window=None,
     map_offset_xy=(0.0, 0.0),
     trim_edges=False,
+    map_x_limits=None,
+    map_y_limits=None,
     title_and_labels=True,
     colorbar_scale=None,
     output_dir="StrainMaps",
@@ -1064,6 +1067,11 @@ def generate_strain_maps_from_json(
         if trim_edges:
             x_min_edge = max(x_min_edge, 0.0)
             y_min_edge = max(y_min_edge, 0.0)
+
+        if map_x_limits:
+            x_min_edge, x_max_edge = map_x_limits
+        if map_y_limits:
+            y_max_edge, y_min_edge = map_y_limits
             
         ax.set_xlim(x_min_edge, x_max_edge)
         ax.set_ylim(y_max_edge, y_min_edge)
@@ -1337,6 +1345,8 @@ def generate_stress_maps_from_json(
     color_limit_window=None,
     map_offset_xy=(0.0, 0.0),
     trim_edges=False,
+    map_x_limits=None,
+    map_y_limits=None,
     colorbar_scale=None,
     output_dir="StressMaps",
     dpi=600,
@@ -1479,12 +1489,17 @@ def generate_stress_maps_from_json(
 
         x_min_edge = startX - (pixel_width / 2)
         x_max_edge = startX + (n_cols - 1) * (dX + gap_mm) + (pixel_width / 2)        
-        y_max_edge = startY - (pixel_height / 2)
-        y_min_edge = startY + (n_rows - 1) * dY + (pixel_height / 2)
+        y_max_edge = startY - (pixel_height / 2) # counter-intuitive, but needs to be this way to make 0,0 in bottom left
+        y_min_edge = startY + (n_rows - 1) * dY + (pixel_height / 2) # same as above ^^
         
         if trim_edges:
             x_min_edge = max(x_min_edge, 0.0)
             y_min_edge = max(y_min_edge, 0.0)
+
+        if map_x_limits:
+            x_min_edge, x_max_edge = map_x_limits
+        if map_y_limits: # has to be flipped to make map plot 0,0 in bottom left
+            y_max_edge, y_min_edge = map_y_limits
             
         ax.set_xlim(x_min_edge, x_max_edge)
         ax.set_ylim(y_max_edge, y_min_edge)
