@@ -10,3 +10,5 @@ __pycache__/
 ValidationOutputFiles/*
 pyfai-env/
 PeakFinding/*
+.venv/
+venv/
