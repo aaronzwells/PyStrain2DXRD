@@ -1,4 +1,5 @@
-# Analysis_pyFAI Documentation
+# PyStrain2DX: Python workflow for calculating Strain using 2-Dimensional XRD
+
 These are the instructions for the workflow provided in this git repository. Please read all the way to the bottom before using the scripts the first time. 
 
 # Installation Instructions
