@@ -1,4 +1,5 @@
 # PyStrain2DXRD: Python workflow for calculating Strain using 2-Dimensional XRD
+DOI: 10.5281/zenodo.17605591
 
 These are the instructions for the workflow provided in this git repository. Please read all the way to the bottom before using the scripts the first time. 
 
