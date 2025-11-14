@@ -33,74 +33,30 @@ def setup_logger(log_path, logger_name=None):
 def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tensor_path=None):
     start_time = time.time()
     poni_file     = "calibration/Calibration_LaB6_100x100_3s_r8_mod2.poni"
-<<<<<<< HEAD
-    tif_file      = tif_override or "InputFiles/VB-APS-SSAO-6_25C_TestMap-AO_000492.avg.tiff"
-=======
     q0_reference_file = None #"ValidationOutputFiles/VB-APS-SSAO-6_25C_Map-AO_000304/q_vs_chi_peaks.txt"
-    tif_file      = tif_override or "InputFiles/Reference_0Strain_inputs/VB-APS-SSAO-6_25C_Map-AO_000304.avg.tiff"
->>>>>>> origin
+    tif_file      = "InputFiles/Reference_0Strain_inputs/VB-APS-SSAO-6_30C_cool_Map-AO_001474.avg.tiff"
+    mask_file     = None # Either "path/to/your/mask.tif" or None
     save_chi_files = False # this determines whether every q vs chi bin dataset is saved as a separate file or if the file writing is skipped
-    save_adjusted_tif = False
-    mask_thresh   = 4e2 # threshold value for the image mask
+    save_adjusted_tif = True
+    mask_thresh   = 4e2 # minimum threshold value for the image mask
     num_azim_bins = 120 # number of azimuthal bins around the data
     q_min_nm1     = 14.0 # q_0 for binning of the data
     npt_rad       = 2048 # number of radial bins (~2-3x the radial pixel count)
     delta_tol     = 0.1 # default q-search width tolerance in nm^-1
     wavelength_nm = 0.1729786687 # [nm] X-ray wavelength
     solved_strain_components = 5 # This is the number of strain components to solve for in the system. # 3 = biaxial; 5 = biaxial w/ shear; 6 = all components
-<<<<<<< HEAD
-    initial_q_guesses = [    
-        17.960905,
-        24.502083,
-        26.266744,
-        29.974327,
-        35.928976,
-        39.032337,
-        44.513362,
-        45.511905]    
-    
-    #Aaron's values
-    # initial_q_guesses = [
-    #             17.961188,
-    #             24.500613,
-    #             26.267830,
-    #             29.974002,
-    #             35.926353,
-    #             39.034769,
-    #             44.513621,
-    #             45.514461
-    #         ]
-    # initial_q_guesses = [
-    #     17.957430, 
-    #     24.499120, 
-    #     26.267714, 
-    #     29.972252, 
-    #     35.923938, 
-    #     39.032177, 
-    #     41.355087, 
-    #     44.509848] # initial guesses for peak fitting [nm^-1] for Alumina
-    # initial_q_guesses = [ # initial guesses for peak fitting [nm^-1] for calibrant
-    #     15.111021, 
-    #     21.370204, 
-    #     26.171220, 
-    #     30.222884, 
-    #     33.791341, 
-    #     37.018340, 
-    #     42.747420, 
-    #     45.341304] 
-=======
+    MAD_threshold = 3 # Threshold for median absolute deviation (MAD) filtering
     initial_q_guesses = [
-                17.961188,
-                24.500613,
-                26.267830,
-                29.974002,
-                35.926353,
-                39.034769,
-                44.513621,
-                45.514461
+                17.959886,
+                24.497447,
+                26.268024,
+                29.970841,
+                35.922285,
+                39.032558,
+                44.507226,
+                45.509875
             ]
      
->>>>>>> origin
     tol_array   = np.array([ # tolerance values for q when searching for a peak to fit [nm^-1] for calibrant
         [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1], # larger q
         [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]]) # smaller q
@@ -129,6 +85,7 @@ def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tenso
         poni_file,
         tif_file,
         output_path=output_path,
+        mask_file=mask_file,
         mask_threshold=mask_thresh,
         logger=file_logger,
         save_adjusted_tif=save_adjusted_tif)
@@ -194,6 +151,7 @@ def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tenso
         phi_deg=None,
         omega_deg=None,
         num_strain_components=solved_strain_components,
+        MAD_threshold=MAD_threshold,
         output_dir=output_path,
         dpi=600,
         plot=True,

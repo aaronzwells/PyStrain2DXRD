@@ -50,6 +50,7 @@ def batch_main_pipeline(config):
         try:
             # Initialization of user-defined variables
             poni_file = config['poni_file']
+            mask_file = config['mask_file']
             save_chi_files = config['save_chi_files']
             plot_q_vs_chi = config['plot_q_vs_chi']
             plot_strain_vs_chi = config['plot_strain_vs_chi']
@@ -62,6 +63,7 @@ def batch_main_pipeline(config):
             delta_tol = config['delta_tol']
             wavelength_nm = config['wavelength_nm']
             solved_strain_components = config['solved_strain_components']
+            MAD_threshold = config['MAD_threshold']
             initial_q_guesses = config['initial_q_guesses']
             tol_array = np.array(config['tol_array']) # Ensure it's a numpy array
             eta0 = config['eta0']
@@ -75,6 +77,7 @@ def batch_main_pipeline(config):
             data, mask = fl.load_and_prep_image( # loads and masks the TIFF for analysis
                 tif_file,
                 output_path=output_path,
+                mask_file=mask_file,
                 mask_threshold=mask_thresh,
                 logger=file_logger,
                 save_adjusted_tif=save_adjusted_tif
@@ -126,6 +129,7 @@ def batch_main_pipeline(config):
                 phi_deg=None,
                 omega_deg=None,
                 num_strain_components=solved_strain_components,
+                MAD_threshold=MAD_threshold,
                 output_dir=output_path,
                 dpi=600,
                 plot=True,
@@ -202,31 +206,33 @@ def setup_logger(log_path, logger_name=None):
 if __name__ == "__main__":
     multiprocessing.set_start_method('spawn') # spawn just defines a type of parallel processing
     config = { # --- main analysis configuration dictionary ---
-        'input_dir': "InputFiles/25C_AO_inputs", # directory housing the input images
-        'sampleName': "VB-APS-SSAO-6_25C", # name used to create output data files
+        'input_dir': "InputFiles/200C_cool_AO_inputs", # directory housing the input images
+        'sampleName': "VB-APS-SSAO-6_200C_cool", # name used to create output data files
         'poni_file': "calibration/Calibration_LaB6_100x100_3s_r8_mod2.poni", # calibration file path
-        'q0_reference_file': "ValidationOutputFiles/VB-APS-SSAO-6_25C_Map-AO_000304/q0_vs_chi_FITTED.txt", # q0 reference file path
+        'q0_reference_file': "ValidationOutputFiles/VB-APS-SSAO-6_200C_cool/q0_vs_chi_FITTED.txt", # q0 reference file path
+        'mask_file': None, # Set to "path/to/your/mask.tif" to use a mask
         'save_chi_files': False, # toggles saving the azimuthal q data for each bin
         'plot_q_vs_chi': False, # toggles plotting q vs chi plots
         'plot_strain_vs_chi': False, # toggles plotting unfitted strain vs chi plots
         'save_adjusted_tif': False, # toggles saving the adjusted TIF files
         'num_jobs_parallel': -2, # Uses all cores except for 1 to perform parallel calculations (-1 indicates using the maximum number of cores)
-        'mask_thresh': 4e2, # mask threshold for pixels; not used unless chosen; can be left at 4e2
+        'mask_thresh': 4e2, # mask minimum threshold for pixels; not used unless chosen; can be left at 4e2
         'num_azim_bins': 120, # number of azimuthal bins for averaging the peaks
         'q_min_nm1': 14.0, # minimum q value for radial integration
         'npt_rad': 3000, # number of radial points from which to calculate peak centroids; ~2-3x radial pixel count
         'delta_tol': 0.1, # A tolerance value for finding peak centroids if tol_array is not filled in
         'wavelength_nm': 0.1729786687, # X-ray wavelength [nm]
         'solved_strain_components': 5, # 3=biaxial, 5=biaxial+shear, 6=full
+        'MAD_threshold': 3, # Threshold for median absolute deviation (MAD) filtering
         'initial_q_guesses': [ # Initial q-values retrieved from 1.FindingRefPeaks.py for the particular dataset in question
-            17.961188,
-            24.500613,
-            26.267830,
-            29.974002,
-            35.926353,
-            39.034769,
-            44.513621,
-            45.514461
+            17.937944,
+            24.470245,
+            26.239514,
+            29.938474,
+            35.886943,
+            38.988240,
+            44.459118,
+            45.461021
         ],
         'tol_array': [ # The tolerance in q [nm^-1] for finding the peak centroids
             [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1], # looking up in q (larger values)

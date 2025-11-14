@@ -16,3 +16,4 @@ pyfai-env/
 .venv/
 venv/
 >>>>>>> origin
+.DS_Store

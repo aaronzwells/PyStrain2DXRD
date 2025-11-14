@@ -175,7 +175,7 @@ def pseudo_voigt(x, amp, cen, wid, eta, bg_const): # bg_slope
     return eta * lorentz + (1 - eta) * gauss + background
 
 # --- PyFAI data loading & integration -----------------------------------
-def load_integrator_and_data(poni_path, tif_path, output_path, ref_tif_path=None, mask_threshold=4e2, logger=None, save_adjusted_tif=True):
+def load_integrator_and_data(poni_path, tif_path, output_path, mask_file=None, ref_tif_path=None, mask_threshold=4e2, logger=None, save_adjusted_tif=True):
     """
     Load/initialize PyFAI integrator and adjust a 2D XRD image using an auto-CB 
     scheme from ImageJ. Saves the adjusted image.
@@ -187,26 +187,27 @@ def load_integrator_and_data(poni_path, tif_path, output_path, ref_tif_path=None
         poni_path (str): Path to the pyFAI calibration file (.poni).
         tif_path (str): Path to the input TIFF image.
         output_path (str): Directory to save the adjusted image.
+        mask_file (str, optional): Path to an external mask file (e.g., .tif, .npy). 
+                                   In the mask file, 0 or False = GOOD (unmasked), 1 or True = BAD (masked).
         ref_tif_path (str, optional): Unused. Defaults to None.
         mask_threshold (float, optional): Unused. Defaults to 4e2.
         logger (logging.Logger, optional): Logger for status messages. Defaults to None.
 
     Returns:
         tuple: A tuple containing (ai, data_adj, mask), where `ai` is the AzimuthalIntegrator,
-               `data_adj` is the contrast-adjusted image data, and `mask` is None.
+               `data_adj` is the contrast-adjusted image data, and `mask` is the 
+               boolean mask array (True = masked/bad).
     """
+    logger = logger or logging.getLogger(__name__)    
+    
     # Load calibrant and raw image
     ai  = pyFAI.load(poni_path)
     img = fabio.open(tif_path)
     data = img.data.astype(np.float32)
 
     # Contrast adjustment using ImageJ-style autocontrast (wider dynamic range)
-    data_adj_float = imagej_autocontrast(data, k=3.0)
+    data_adj = imagej_autocontrast(data, k=3.0)
 
-    # Keep data as float32 for pyFAI processing
-    data_adj = data_adj_float
-
-    logger = logger or logging.getLogger(__name__)
     if save_adjusted_tif:
         # Save adjusted TIF alongside the original
         base, ext = os.path.splitext(tif_path)
@@ -217,10 +218,39 @@ def load_integrator_and_data(poni_path, tif_path, output_path, ref_tif_path=None
     else:
         logger.info(f"Adjusted image not saved.")
 
-    # This function does not compute a mask; it returns None.
-    return ai, data_adj, None
+    # --- Masking Logic ---
+    final_mask = None
 
-def load_and_prep_image(tif_path, output_path, mask_threshold=4e2, logger=None, save_adjusted_tif=True):
+    # 1. Load external mask file
+    if mask_file and os.path.exists(mask_file):
+        try:
+            mask_data = fabio.open(mask_file).data
+            # Standard mask file convention: 1 = bad pixel, 0 = good pixel.
+            # pyFAI mask convention: True = bad pixel, False = good pixel.
+            final_mask = (mask_data == 1) 
+            logger.info(f"Successfully loaded external mask from: {mask_file}")
+        except Exception as e:
+            logger.warning(f"Failed to load mask file {mask_file}: {e}. No external mask applied.")
+
+    # 2. Apply threshold mask (hot pixels)
+    if mask_threshold is not None:
+        # Mask pixels *below* the threshold
+        threshold_mask = data > mask_threshold
+        logger.info(f"Generated threshold mask for intensity < {mask_threshold}")
+        
+        if final_mask is not None:
+            # Combine masks (pixel is bad if in *either* mask)
+            final_mask = final_mask | threshold_mask
+            logger.info("Combined external mask and threshold mask.")
+        else:
+            final_mask = threshold_mask
+    
+    if final_mask is None:
+        logger.info("No mask was applied.")
+
+    return ai, data_adj, final_mask
+
+def load_and_prep_image(tif_path, output_path, mask_file=None, mask_threshold=4e2, logger=None, save_adjusted_tif=True):
     """
     Loads and prepares a single TIFF image for integration.
 
@@ -230,12 +260,15 @@ def load_and_prep_image(tif_path, output_path, mask_threshold=4e2, logger=None, 
     Args:
         tif_path (str): Path to the input TIFF image.
         output_path (str): Directory to save the adjusted image.
+        mask_file (str, optional): Path to an external mask file (e.g., .tif, .npy). 
+                                   In the mask file, 0 or False = GOOD (unmasked), 1 or True = BAD (masked).
         mask_threshold (float, optional): Unused. Defaults to 4e2.
         logger (logging.Logger, optional): Logger for status messages. Defaults to None.
 
     Returns:
         tuple: A tuple containing (data_adj, mask), where `data_adj` is the
-               contrast-adjusted image data, and `mask` is None.
+               contrast-adjusted image data, and `mask` is the boolean mask array
+               (True = masked/bad).
     """
     logger = logger or logging.getLogger(__name__)
 
@@ -254,9 +287,37 @@ def load_and_prep_image(tif_path, output_path, mask_threshold=4e2, logger=None, 
     else: 
         logger.info(f"Adjusted image not saved.")
 
+    # --- Masking Logic ---
+    final_mask = None
 
-    # This function does not compute a mask; it returns None.
-    return data_adj, None
+    # 1. Load external mask file
+    if mask_file and os.path.exists(mask_file):
+        try:
+            mask_data = fabio.open(mask_file).data
+            # Standard mask file convention: 1 = bad, 0 = good.
+            # pyFAI mask convention: True = bad, False = good.
+            final_mask = (mask_data == 1) 
+            logger.info(f"Successfully loaded external mask from: {mask_file}")
+        except Exception as e:
+            logger.warning(f"Failed to load mask file {mask_file}: {e}. No external mask applied.")
+
+    # 2. Apply threshold mask (hot pixels)
+    if mask_threshold is not None:
+        # Mask pixels *above* the threshold
+        threshold_mask = data > mask_threshold
+        logger.info(f"Generated threshold mask for intensity > {mask_threshold}")
+        
+        if final_mask is not None:
+            # Combine masks (pixel is bad if in *either* mask)
+            final_mask = final_mask | threshold_mask
+            logger.info("Combined external mask and threshold mask.")
+        else:
+            final_mask = threshold_mask
+    
+    if final_mask is None:
+        logger.info("No mask was applied.")
+
+    return data_adj, final_mask
 
 def integrate_2d(ai, data, mask, num_azim_bins=360, q_min=16.0, npt_rad=5000, output_dir=None, save_chi_files=False, logger=None):
     """
@@ -516,7 +577,8 @@ def plot_strain_vs_chi_stacked(file_path, output_dir=None, chi_deg=None, dpi=600
 
 # --- Compute full strain tensor ----------------------------------------
 def fit_lattice_cone_distortion(q_data, q_errors, q0_chi_data, initial_q_guesses, wavelength_nm,
-                                chi_deg=None, psi_deg=None, phi_deg=None, omega_deg=None, num_strain_components=3, output_dir=None, dpi=600, plot=True, logger=None, min_rsquared=0.0):
+                                chi_deg=None, psi_deg=None, phi_deg=None, omega_deg=None, num_strain_components=3, MAD_threshold=8.0,
+                                output_dir=None, dpi=600, plot=True, logger=None, min_rsquared=0.0):
     """
     Fits a lattice cone distortion model to q(χ) data to extract strain tensor components.
 
@@ -625,7 +687,7 @@ def fit_lattice_cone_distortion(q_data, q_errors, q0_chi_data, initial_q_guesses
             median_q = np.median(y)
             abs_deviation = np.abs(y - median_q)
             mad = np.median(abs_deviation)
-            threshold = 8.0 * mad # Define the outlier threshold (3.0 is a good starting point)
+            threshold = MAD_threshold * mad # Define the outlier threshold (3.0 is a good starting point)
             outlier_mask = abs_deviation < threshold # Keep only the points within the threshold
             num_outliers = len(y) - np.sum(outlier_mask) # Log how many points were removed
             if num_outliers > 0:
@@ -839,6 +901,8 @@ def generate_strain_maps_from_json(
     color_limit_window=None,
     map_offset_xy=(0.0, 0.0),
     trim_edges=False,
+    map_x_limits=None,
+    map_y_limits=None,
     title_and_labels=True,
     colorbar_scale=None,
     output_dir="StrainMaps",
@@ -955,6 +1019,10 @@ def generate_strain_maps_from_json(
     colorbar_bins=colorbar_bins
     # --- Plotting Function ---
     def plot_and_save(data, title, filename, colorbar_bins):
+        # Global fontsize adjustment
+        plt.rcParams.update({'font.size': 10.5})
+        
+
         data = np.flipud(data)
 
         fig, ax = plt.subplots(figsize=(3.5, 4), dpi=dpi)
@@ -1003,6 +1071,11 @@ def generate_strain_maps_from_json(
         if trim_edges:
             x_min_edge = max(x_min_edge, 0.0)
             y_min_edge = max(y_min_edge, 0.0)
+
+        if map_x_limits:
+            x_min_edge, x_max_edge = map_x_limits
+        if map_y_limits:
+            y_max_edge, y_min_edge = map_y_limits
             
         ax.set_xlim(x_min_edge, x_max_edge)
         ax.set_ylim(y_max_edge, y_min_edge)
@@ -1276,6 +1349,8 @@ def generate_stress_maps_from_json(
     color_limit_window=None,
     map_offset_xy=(0.0, 0.0),
     trim_edges=False,
+    map_x_limits=None,
+    map_y_limits=None,
     colorbar_scale=None,
     output_dir="StressMaps",
     dpi=600,
@@ -1418,12 +1493,17 @@ def generate_stress_maps_from_json(
 
         x_min_edge = startX - (pixel_width / 2)
         x_max_edge = startX + (n_cols - 1) * (dX + gap_mm) + (pixel_width / 2)        
-        y_max_edge = startY - (pixel_height / 2)
-        y_min_edge = startY + (n_rows - 1) * dY + (pixel_height / 2)
+        y_max_edge = startY - (pixel_height / 2) # counter-intuitive, but needs to be this way to make 0,0 in bottom left
+        y_min_edge = startY + (n_rows - 1) * dY + (pixel_height / 2) # same as above ^^
         
         if trim_edges:
             x_min_edge = max(x_min_edge, 0.0)
             y_min_edge = max(y_min_edge, 0.0)
+
+        if map_x_limits:
+            x_min_edge, x_max_edge = map_x_limits
+        if map_y_limits: # has to be flipped to make map plot 0,0 in bottom left
+            y_max_edge, y_min_edge = map_y_limits
             
         ax.set_xlim(x_min_edge, x_max_edge)
         ax.set_ylim(y_max_edge, y_min_edge)
@@ -1479,7 +1559,7 @@ def generate_stress_maps_from_json(
     avg_s_zz = np.nanmean([np.array(r)[:,5].reshape(n_rows,n_cols) for r in filtered], axis=0)
     avg_s_vm = np.sqrt(0.5 * ((avg_s_xx-avg_s_yy)**2 + (avg_s_yy-avg_s_zz)**2 + (avg_s_zz-avg_s_xx)**2) + 
                        3 * (avg_s_xy**2 + avg_s_xz**2 + avg_s_yz**2))
-
+    
     plot_and_save(avg_s_xx, r'$\sigma_{xx}$ (Avg)', f"{map_name_pfx}_xx_avg.png")
     plot_and_save(avg_s_xy, r'$\sigma_{xy}$ (Avg)', f"{map_name_pfx}_xy_avg.png")
     plot_and_save(avg_s_yy, r'$\sigma_{yy}$ (Avg)', f"{map_name_pfx}_yy_avg.png")
@@ -1487,3 +1567,38 @@ def generate_stress_maps_from_json(
     plot_and_save(avg_s_yz, r'$\sigma_{yz}$ (Avg)', f"{map_name_pfx}_yz_avg.png")
     plot_and_save(avg_s_zz, r'$\sigma_{zz}$ (Avg)', f"{map_name_pfx}_zz_avg.png")
     plot_and_save(avg_s_vm, r'$\sigma_{VM}$ (Avg)', f"{map_name_pfx}_Mises_avg.png")
+
+    # --- Find max and min average stress, potentially within a window ---
+    maps_to_summarize = {
+        "s_xx": avg_s_xx, "s_xy": avg_s_xy, "s_yy": avg_s_yy,
+        "s_xz": avg_s_xz, "s_yz": avg_s_yz, "s_zz": avg_s_zz,
+        "s_vm": avg_s_vm
+    }
+    stress_extremes = {}
+
+    if color_limit_window:
+        logger.info(f"Calculating stress extremes based on window: {color_limit_window} mm")
+        x_min_win, x_max_win = color_limit_window
+        x_min_win_shifted, x_max_win_shifted = x_min_win + shiftX, x_max_win + shiftX
+        
+        col_step = dX + (gap_mm if gap_mm else 0.0)
+        win_idx0 = max(0, int(np.floor((x_min_win_shifted - startX) / col_step)))
+        win_idx1 = min(n_cols, int(np.ceil((x_max_win_shifted - startX) / col_step)))
+        
+        logger.info(f"Window corresponds to columns {win_idx0} to {win_idx1}.")
+
+        for name, data_map in maps_to_summarize.items():
+            subset = data_map[:, win_idx0:win_idx1]
+            if np.any(~np.isnan(subset)):
+                stress_extremes[name] = (np.nanmin(subset), np.nanmax(subset))
+            else:
+                stress_extremes[name] = (np.nan, np.nan)
+    else:
+        logger.info("Calculating stress extremes based on the full map.")
+        for name, data_map in maps_to_summarize.items():
+            if np.any(~np.isnan(data_map)):
+                stress_extremes[name] = (np.nanmin(data_map), np.nanmax(data_map))
+            else:
+                stress_extremes[name] = (np.nan, np.nan)
+
+    return stress_extremes
