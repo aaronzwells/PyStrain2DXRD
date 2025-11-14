@@ -1019,6 +1019,10 @@ def generate_strain_maps_from_json(
     colorbar_bins=colorbar_bins
     # --- Plotting Function ---
     def plot_and_save(data, title, filename, colorbar_bins):
+        # Global fontsize adjustment
+        plt.rcParams.update({'font.size': 10.5})
+        
+
         data = np.flipud(data)
 
         fig, ax = plt.subplots(figsize=(3.5, 4), dpi=dpi)
@@ -1555,7 +1559,7 @@ def generate_stress_maps_from_json(
     avg_s_zz = np.nanmean([np.array(r)[:,5].reshape(n_rows,n_cols) for r in filtered], axis=0)
     avg_s_vm = np.sqrt(0.5 * ((avg_s_xx-avg_s_yy)**2 + (avg_s_yy-avg_s_zz)**2 + (avg_s_zz-avg_s_xx)**2) + 
                        3 * (avg_s_xy**2 + avg_s_xz**2 + avg_s_yz**2))
-
+    
     plot_and_save(avg_s_xx, r'$\sigma_{xx}$ (Avg)', f"{map_name_pfx}_xx_avg.png")
     plot_and_save(avg_s_xy, r'$\sigma_{xy}$ (Avg)', f"{map_name_pfx}_xy_avg.png")
     plot_and_save(avg_s_yy, r'$\sigma_{yy}$ (Avg)', f"{map_name_pfx}_yy_avg.png")
@@ -1563,3 +1567,38 @@ def generate_stress_maps_from_json(
     plot_and_save(avg_s_yz, r'$\sigma_{yz}$ (Avg)', f"{map_name_pfx}_yz_avg.png")
     plot_and_save(avg_s_zz, r'$\sigma_{zz}$ (Avg)', f"{map_name_pfx}_zz_avg.png")
     plot_and_save(avg_s_vm, r'$\sigma_{VM}$ (Avg)', f"{map_name_pfx}_Mises_avg.png")
+
+    # --- Find max and min average stress, potentially within a window ---
+    maps_to_summarize = {
+        "s_xx": avg_s_xx, "s_xy": avg_s_xy, "s_yy": avg_s_yy,
+        "s_xz": avg_s_xz, "s_yz": avg_s_yz, "s_zz": avg_s_zz,
+        "s_vm": avg_s_vm
+    }
+    stress_extremes = {}
+
+    if color_limit_window:
+        logger.info(f"Calculating stress extremes based on window: {color_limit_window} mm")
+        x_min_win, x_max_win = color_limit_window
+        x_min_win_shifted, x_max_win_shifted = x_min_win + shiftX, x_max_win + shiftX
+        
+        col_step = dX + (gap_mm if gap_mm else 0.0)
+        win_idx0 = max(0, int(np.floor((x_min_win_shifted - startX) / col_step)))
+        win_idx1 = min(n_cols, int(np.ceil((x_max_win_shifted - startX) / col_step)))
+        
+        logger.info(f"Window corresponds to columns {win_idx0} to {win_idx1}.")
+
+        for name, data_map in maps_to_summarize.items():
+            subset = data_map[:, win_idx0:win_idx1]
+            if np.any(~np.isnan(subset)):
+                stress_extremes[name] = (np.nanmin(subset), np.nanmax(subset))
+            else:
+                stress_extremes[name] = (np.nan, np.nan)
+    else:
+        logger.info("Calculating stress extremes based on the full map.")
+        for name, data_map in maps_to_summarize.items():
+            if np.any(~np.isnan(data_map)):
+                stress_extremes[name] = (np.nanmin(data_map), np.nanmax(data_map))
+            else:
+                stress_extremes[name] = (np.nan, np.nan)
+
+    return stress_extremes
