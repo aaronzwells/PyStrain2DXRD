@@ -9,4 +9,4 @@ PeakFinding/
 __pycache__/
 ValidationOutputFiles/*
 pyfai-env/
-PeakFinding/Summary_Peak_Locations.txt
+PeakFinding/*
