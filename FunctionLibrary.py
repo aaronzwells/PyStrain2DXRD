@@ -93,6 +93,8 @@ def fit_peak_centroids(x_data, y_data, height_frac=0.1, distance=20, eta0=0.5, d
         try:
             # Set up initial parameters and bounds for the curve fit
             p0 = [y[idx], x0, wid, eta0]
+            # Bounds need to match the number of parameters in the function being fit.
+            # Since the original call didn't account for background, we fix it at 0.
             bounds = ([0, x0 - delta_tol, 0, 0], [np.inf, x0 + delta_tol, np.inf, 1])
             popt, _ = curve_fit(pseudo_voigt, x[sl], y[sl], p0=p0, bounds=bounds)
             peak_positions.append(popt[1])  # Append the fitted centroid (popt[1])
@@ -148,7 +150,7 @@ def imagej_autocontrast(image, k=2.5):
 
 # --- Pseudo-Voigt profile -----------------------------------------------
 @njit(cache=True)
-def pseudo_voigt(x, amp, cen, wid, eta, bg_const): # bg_slope
+def pseudo_voigt(x, amp, cen, wid, eta): # bg_slope , bg_const=0.0
     """
     A pseudo-Voigt profile, which is a linear combination of Gaussian and Lorentzian profiles.
 
@@ -161,7 +163,7 @@ def pseudo_voigt(x, amp, cen, wid, eta, bg_const): # bg_slope
         cen (float): The center of the peak.
         wid (float): The full width at half maximum (FWHM) of the peak.
         eta (float): The mixing parameter between Gaussian (0) and Lorentzian (1).
-        # bg_const (float): Constant (y-intercept) of the background.
+        bg_const (float, optional): Constant (y-intercept) of the background. Defaults to 0.0.
         # bg_slope (float): Slope of the background.
 
     Returns:
@@ -171,8 +173,7 @@ def pseudo_voigt(x, amp, cen, wid, eta, bg_const): # bg_slope
     gamma = wid / 2
     gauss   = amp * np.exp(-((x - cen) ** 2) / (2 * sigma ** 2))
     lorentz = amp * (gamma ** 2) / ((x - cen) ** 2 + gamma ** 2)
-    background = bg_const # + bg_slope * (x - cen) # Centering the slope term improves fit stability
-    return eta * lorentz + (1 - eta) * gauss + background
+    return eta * lorentz + (1 - eta) * gauss
 
 # --- PyFAI data loading & integration -----------------------------------
 def load_integrator_and_data(poni_path, tif_path, output_path, mask_file=None, ref_tif_path=None, mask_threshold=4e2, logger=None, save_adjusted_tif=True):
