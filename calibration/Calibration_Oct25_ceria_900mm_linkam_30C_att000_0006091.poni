@@ -1,0 +1,14 @@
+# Nota: C-Order, 1 refers to the Y axis, 2 to the X axis
+# Calibration done on Fri Nov 14 14:45:00 2025
+poni_version: 2.1
+Detector: PilatusCdTe2M
+Detector_config: {"orientation": 3}
+Distance: 0.9205730481156568
+Poni1: 0.14693643912075371
+Poni2: 0.11459672539827742
+Rot1: -0.0073345739524228555
+Rot2: 0.0035984481468829535
+Rot3: 3.9019308732777544e-10
+Wavelength: 1.7297867966013764e-11
+# Calibrant: CeO2
+# Image: fabio:///Users/benjaminschneiderman/APS_2025-10/pilatus/ceria_900mm_linkam_30C_att000/ceria_900mm_linkam_30C_att000_0006091_flipped.tif

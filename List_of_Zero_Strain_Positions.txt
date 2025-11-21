@@ -1,0 +1,209 @@
+List of Zero-Strain Positions
+
+X = 0.45 Y = 0.814 from specimen corner
+
+
+VB_APS_SSAO_5_25C_Before_AO: 
+xN = 7
+yN = 37
+dx = 0.100
+dy = 0.025
+
+Lower Right Scan ID: 1119
+Lower Right Coordinate: X = 0.65, Y = 0.075
+Columns to Subtract: 2
+Rows to Subtract: 30 (x7)
+
+q0 Scan ID: 907
+
+
+
+
+VB_APS_SSAO_5_100C_Heat_AO: 
+xN = 7
+yN = 19
+dx = 0.100
+dy = 0.05
+
+Lower Right Scan ID: 1423
+Lower Right Coordinate: X = 0.65, Y = 0.075
+Columns to Subtract: 2
+Rows to Subtract: 15 (x7)
+
+q0 Scan ID: 1316
+
+
+
+
+VB_APS_SSAO_5_200C_Heat_AO: 
+xN = 7
+yN = 19
+dx = 0.100
+dy = 0.05
+
+Lower Right Scan ID: 1556
+Lower Right Coordinate: X = 0.65, Y = 0.075
+Columns to Subtract: 2
+Rows to Subtract: 15 (x7)
+
+q0 Scan ID: 1449
+
+
+
+
+VB_APS_SSAO_5_300C_Heat_AO: 
+xN = 7
+yN = 19
+dx = 0.100
+dy = 0.05
+
+Lower Right Scan ID: 1689
+Lower Right Coordinate: X = 0.65, Y = 0.075
+Columns to Subtract: 2
+Rows to Subtract: 15 (x7)
+
+q0 Scan ID: 1582
+
+
+
+
+VB_APS_SSAO_5_400C_Heat_AO: 
+xN = 7
+yN = 19
+dx = 0.100
+dy = 0.05
+
+Lower Right Scan ID: 1822
+Lower Right Coordinate: X = 0.65, Y = 0.075
+Columns to Subtract: 2
+Rows to Subtract: 15 (x7)
+
+q0 Scan ID: 1715
+
+
+
+
+VB_APS_SSAO_5_600C_Heat_AO: 
+xN = 7
+yN = 19
+dx = 0.100
+dy = 0.05
+
+Lower Right Scan ID: 1955
+Lower Right Coordinate: X = 0.65, Y = 0.075
+Columns to Subtract: 2
+Rows to Subtract: 15 (x7)
+
+q0 Scan ID: 1848
+
+
+
+
+VB_APS_SSAO_5_800C_Peak_AO: 
+xN = 7
+yN = 19
+dx = 0.100
+dy = 0.05
+
+Lower Right Scan ID: 2088
+Lower Right Coordinate: X = 0.65, Y = 0.075
+Columns to Subtract: 2
+Rows to Subtract: 15 (x7)
+
+q0 Scan ID: 1981
+
+
+
+
+VB_APS_SSAO_5_600C_Cool_AO: 
+xN = 7
+yN = 19
+dx = 0.100
+dy = 0.05
+
+Lower Right Scan ID: 2221
+Lower Right Coordinate: X = 0.65, Y = 0.075
+Columns to Subtract: 2
+Rows to Subtract: 15 (x7)
+
+q0 Scan ID: 2114
+
+
+
+
+VB_APS_SSAO_5_400C_Cool_AO: 
+xN = 7
+yN = 19
+dx = 0.100
+dy = 0.05
+
+Lower Right Scan ID: 2354
+Lower Right Coordinate: X = 0.65, Y = 0.075
+Columns to Subtract: 2
+Rows to Subtract: 15 (x7)
+
+q0 Scan ID: 2247
+
+
+
+
+VB_APS_SSAO_5_300C_Cool_AO: 
+xN = 7
+yN = 19
+dx = 0.100
+dy = 0.05
+
+Lower Right Scan ID: 2511
+Lower Right Coordinate: X = 0.65, Y = 0.075
+Columns to Subtract: 2
+Rows to Subtract: 15 (x7)
+
+q0 Scan ID: 2404
+
+
+
+
+VB_APS_SSAO_5_200C_Cool_AO: 
+xN = 7
+yN = 19
+dx = 0.100
+dy = 0.05
+
+Lower Right Scan ID: 2644
+Lower Right Coordinate: X = 0.65, Y = 0.075
+Columns to Subtract: 2
+Rows to Subtract: 15 (x7)
+
+q0 Scan ID: 2537
+
+
+
+
+VB_APS_SSAO_5_100C_Cool_AO: 
+xN = 7
+yN = 19
+dx = 0.100
+dy = 0.05
+
+Lower Right Scan ID: 2777
+Lower Right Coordinate: X = 0.65, Y = 0.075
+Columns to Subtract: 2
+Rows to Subtract: 15 (x7)
+
+q0 Scan ID: 2670
+
+
+
+
+VB_APS_SSAO_5_30C_After_AO: 
+xN = 7
+yN = 19
+dx = 0.100
+dy = 0.05
+
+Lower Right Scan ID: 2910
+Lower Right Coordinate: X = 0.65, Y = 0.075
+Columns to Subtract: 2
+Rows to Subtract: 15 (x7)
+
+q0 Scan ID: 2803
