@@ -7,9 +7,9 @@ import fabio
 import os
 
 poni_file = "calibration/Calibration_Oct25_ceria_900mm_linkam_30C_att000_0006091.poni" # calibration PONI file
-tif_file = "InputFiles/VB_APS_SSAO_5_25C_Before_AO/VB_APS_SSAO_5_25C_Before_AO_0000907.tif" # representative data TIF file
+tif_file = "InputFiles/Reference_0Strain_inputs/VB_APS_SSAO_5_25C_Before_AO_0000907.tif" # representative data TIF file
 detector_type = "Pilatus" # "Pilatus" or "GE"
-mask_file = "InputFiles/pilatus_mask.msk" # Either "path/to/your/mask.tif" or None
+mask_file = "calibration/pilatus_mask.msk" # Either "path/to/your/mask.tif" or None
 
 def main(
         poni_file=poni_file, 
@@ -71,7 +71,7 @@ def main(
     ax = plt.gca()
     ax.xaxis.set_major_locator(ticker.MultipleLocator(10))
     ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(5))
-    ax.set_xlim(0,90)
+    ax.set_xlim(10,90)
     
     # plt.legend()
     plt.tight_layout()
