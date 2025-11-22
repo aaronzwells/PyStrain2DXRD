@@ -14,7 +14,7 @@ mask_file = "calibration/pilatus_mask.msk" # Either "path/to/your/mask.tif" or N
 def main(
         poni_file=poni_file, 
         tif_file=tif_file, 
-        height_frac=0.05, 
+        height_frac=0.1, 
         distance=20):
     
     # This removes the file extension and .avg from the end of the averaged image files

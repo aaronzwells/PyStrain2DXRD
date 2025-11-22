@@ -32,13 +32,14 @@ def setup_logger(log_path, logger_name=None):
 # --- Main pipeline -------------------------------------------------------
 def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tensor_path=None):
     start_time = time.time()
-    poni_file     = "calibration/Calibration_LaB6_100x100_3s_r8_mod2.poni"
+    poni_file     = "calibration/Calibration_Oct25_ceria_900mm_linkam_30C_att000_0006091.poni"
     q0_reference_file = None #"ValidationOutputFiles/VB-APS-SSAO-6_25C_Map-AO_000304/q_vs_chi_peaks.txt"
-    tif_file      = "InputFiles/Reference_0Strain_inputs/VB-APS-SSAO-6_30C_cool_Map-AO_001474.avg.tiff"
-    mask_file     = None # Either "path/to/your/mask.tif" or None
+    tif_file      = "InputFiles/Reference_0Strain_inputs/VB_APS_SSAO_5_25C_Before_AO_0000907.tif"
+    mask_file     = "calibration/pilatus_mask.msk" # Either "path/to/your/mask.tif" or None
     save_chi_files = False # this determines whether every q vs chi bin dataset is saved as a separate file or if the file writing is skipped
     save_adjusted_tif = True
-    mask_thresh   = 4e2 # minimum threshold value for the image mask
+    mask_thresh   = 4e2 # UNUSED: minimum threshold value for the image mask
+    autocontrast_sensitivity = 0.5 # Defines the upper and lower bounds of the autocontrast; smaller is a more narrow intensity band
     num_azim_bins = 120 # number of azimuthal bins around the data
     q_min_nm1     = 14.0 # q_0 for binning of the data
     npt_rad       = 2048 # number of radial bins (~2-3x the radial pixel count)
@@ -47,14 +48,14 @@ def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tenso
     solved_strain_components = 5 # This is the number of strain components to solve for in the system. # 3 = biaxial; 5 = biaxial w/ shear; 6 = all components
     MAD_threshold = 3 # Threshold for median absolute deviation (MAD) filtering
     initial_q_guesses = [
-                17.959886,
-                24.497447,
-                26.268024,
-                29.970841,
-                35.922285,
-                39.032558,
-                44.507226,
-                45.509875
+                18.103087,
+                24.677268,
+                26.458500,
+                30.203330,
+                36.188437,
+                39.321810,
+                44.830282,
+                45.838482
             ]
      
     tol_array   = np.array([ # tolerance values for q when searching for a peak to fit [nm^-1] for calibrant
@@ -88,7 +89,8 @@ def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tenso
         mask_file=mask_file,
         mask_threshold=mask_thresh,
         logger=file_logger,
-        save_adjusted_tif=save_adjusted_tif)
+        save_adjusted_tif=save_adjusted_tif,
+        autocontrast_sensitivity=autocontrast_sensitivity)
 
     # Creates output directory for the χ data if there isn't one already
     chi_path = fl.create_directory(f"{output_path}/ChiOutput", logger=file_logger)
