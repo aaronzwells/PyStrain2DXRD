@@ -176,7 +176,7 @@ def pseudo_voigt(x, amp, cen, wid, eta): # bg_slope , bg_const=0.0
     return eta * lorentz + (1 - eta) * gauss
 
 # --- PyFAI data loading & integration -----------------------------------
-def load_integrator_and_data(poni_path, tif_path, output_path, mask_file=None, ref_tif_path=None, mask_threshold=4e2, logger=None, save_adjusted_tif=True):
+def load_integrator_and_data(poni_path, tif_path, output_path, detector_type, mask_file=None, ref_tif_path=None, mask_threshold=4e2, logger=None, save_adjusted_tif=True):
     """
     Load/initialize PyFAI integrator and adjust a 2D XRD image using an auto-CB 
     scheme from ImageJ. Saves the adjusted image.
@@ -188,6 +188,7 @@ def load_integrator_and_data(poni_path, tif_path, output_path, mask_file=None, r
         poni_path (str): Path to the pyFAI calibration file (.poni).
         tif_path (str): Path to the input TIFF image.
         output_path (str): Directory to save the adjusted image.
+        detector_type (str): Type of detector ("Pilatus" or "GE").
         mask_file (str, optional): Path to an external mask file (e.g., .tif, .npy). 
                                    In the mask file, 0 or False = GOOD (unmasked), 1 or True = BAD (masked).
         ref_tif_path (str, optional): Unused. Defaults to None.
@@ -203,8 +204,9 @@ def load_integrator_and_data(poni_path, tif_path, output_path, mask_file=None, r
     
     # Load calibrant and raw image
     ai  = pyFAI.load(poni_path)
-    img = fabio.open(tif_path)
-    data = img.data.astype(np.float32)
+    img = fabio.open(tif_path).data
+    img = np.flipud(img) if detector_type == "Pilatus" else img # Flip the image vertically for Pilatus - MATCHES Oct. 25 CALIBRATION
+    data = img.astype(np.float32)
 
     # Contrast adjustment using ImageJ-style autocontrast (wider dynamic range)
     data_adj = imagej_autocontrast(data, k=3.0)
