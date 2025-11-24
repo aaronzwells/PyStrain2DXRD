@@ -36,6 +36,7 @@ def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tenso
     q0_reference_file = None #"ValidationOutputFiles/VB-APS-SSAO-6_25C_Map-AO_000304/q_vs_chi_peaks.txt"
     tif_file      = "InputFiles/Reference_0Strain_inputs/VB_APS_SSAO_5_25C_Before_AO_0000907.tif"
     mask_file     = "calibration/pilatus_mask.msk" # Either "path/to/your/mask.tif" or None
+    detector_type = "Pilatus" # "Pilatus" or "GE"
     save_chi_files = False # this determines whether every q vs chi bin dataset is saved as a separate file or if the file writing is skipped
     save_adjusted_tif = True
     mask_thresh   = 4e2 # UNUSED: minimum threshold value for the image mask
@@ -57,7 +58,9 @@ def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tenso
                 44.830282,
                 45.838482
             ]
-     
+    
+       
+
     tol_array   = np.array([ # tolerance values for q when searching for a peak to fit [nm^-1] for calibrant
         [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1], # larger q
         [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]]) # smaller q
@@ -86,6 +89,7 @@ def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tenso
         poni_file,
         tif_file,
         output_path=output_path,
+        detector_type=detector_type,
         mask_file=mask_file,
         mask_threshold=mask_thresh,
         logger=file_logger,
