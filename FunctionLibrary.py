@@ -441,9 +441,9 @@ def fit_peaks_with_initial_guesses(I2d, q, q_peaks, delta_tol=0.07, eta0=0.5, n_
 
             try:
                 # Perform the curve fit
-                bg_const_guess = np.min(y) # Guess the background is at the minimum intensity in the window
-                p0 = [np.max(y) - bg_const_guess, q0, wid0, eta0, bg_const_guess]
-                # p0 = [np.max(y), q0, wid0, eta0]
+                # bg_const_guess = np.min(y) # Guess the background is at the minimum intensity in the window
+                # p0 = [np.max(y) - bg_const_guess, q0, wid0, eta0, bg_const_guess]
+                p0 = [np.max(y), q0, wid0, eta0]
                 bounds = ([-np.inf, q0 - tol_dn, 0, 0, -np.inf], 
                           [np.inf, q0 + tol_up, np.inf, 1, np.inf])
                 
