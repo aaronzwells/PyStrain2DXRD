@@ -7,7 +7,8 @@ import fabio
 import os
 
 poni_file = "calibration/Calibration_Oct25_ceria_900mm_linkam_30C_att000_0006091.poni" # calibration PONI file
-tif_file = "InputFiles/Reference_0Strain_inputs/VB_APS_SSAO_5_25C_Before_AO_0000907.tif" # representative data TIF file
+#tif_file = "InputFiles/Reference_0Strain_inputs/VB_APS_SSAO_5_25C_Before_AO_0000907.tif" # representative data TIF file
+tif_file = "InputFiles/ceria_900mm_linkam_30C_att000/ceria_900mm_linkam_30C_att000_0006092.tif"
 detector_type = "Pilatus" # "Pilatus" or "GE"
 mask_file = "calibration/pilatus_mask.msk" # Either "path/to/your/mask.tif" or None
 
@@ -50,11 +51,13 @@ def main(
 
     # Call validate_curve_fitting to fit peaks
     peak_positions_q = fl.fit_peak_centroids(q, I, height_frac=height_frac, distance=distance)
+    peak_positions_d = 2 * np.pi / np.array(peak_positions_q)
     # os.remove(temp_int_file)
 
     # Save peaks to file
     output_txt = os.path.join(output_path,"peak_positions.txt")
-    np.savetxt(output_txt, peak_positions_q, fmt="%.6f", header="q positions of detected peaks [nm^-1]")
+    np.savetxt(output_txt, np.column_stack((peak_positions_q, peak_positions_d)),
+                 fmt="%.6f", delimiter="\t", header="q [nm^-1] \t d [nm]")
     print(f"Detected {len(peak_positions_q)} peaks. Saved to {output_txt}")
 
     # Save q & I data to a file
