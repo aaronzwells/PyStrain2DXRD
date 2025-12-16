@@ -176,7 +176,7 @@ def pseudo_voigt(x, amp, cen, wid, eta): # bg_slope , bg_const=0.0
     return eta * lorentz + (1 - eta) * gauss
 
 # --- PyFAI data loading & integration -----------------------------------
-def load_integrator_and_data(poni_path, tif_path, output_path, detector_type, mask_file=None, ref_tif_path=None, mask_threshold=4e2, logger=None, save_adjusted_tif=True):
+def load_integrator_and_data(poni_path, tif_path, output_path, detector_type, mask_file=None, ref_tif_path=None, mask_threshold=4e2, logger=None, save_adjusted_tif=True, autocontrast_sensitivity=1.5):
     """
     Load/initialize PyFAI integrator and adjust a 2D XRD image using an auto-CB 
     scheme from ImageJ. Saves the adjusted image.
@@ -307,7 +307,7 @@ def load_and_prep_image(tif_path, output_path, mask_file=None, mask_threshold=4e
     # 2. Apply threshold mask (hot pixels)
     if mask_threshold is not None:
         # Mask pixels *above* the threshold
-        threshold_mask = data > mask_threshold
+        threshold_mask = data < mask_threshold
         logger.info(f"Generated threshold mask for intensity > {mask_threshold}")
         
         if final_mask is not None:
@@ -444,8 +444,8 @@ def fit_peaks_with_initial_guesses(I2d, q, q_peaks, delta_tol=0.07, eta0=0.5, n_
                 # bg_const_guess = np.min(y) # Guess the background is at the minimum intensity in the window
                 # p0 = [np.max(y) - bg_const_guess, q0, wid0, eta0, bg_const_guess]
                 p0 = [np.max(y), q0, wid0, eta0]
-                bounds = ([-np.inf, q0 - tol_dn, 0, 0, -np.inf], 
-                          [np.inf, q0 + tol_up, np.inf, 1, np.inf])
+                bounds = ([-np.inf, q0 - tol_dn, 0, 0], 
+                          [np.inf, q0 + tol_up, np.inf, 1])
                 
                 popt, pcov = curve_fit(pseudo_voigt, x, y, p0=p0, bounds=bounds)
                 
@@ -519,14 +519,16 @@ def plot_q_vs_chi_stacked(file_path, output_dir=None, chi_deg=None, dpi=600, plo
 
     if plot:
         import matplotlib.pyplot as plt
+        plt.rcParams.update({'font.size': 16})
         fig, axes = plt.subplots(num_rings, 1, figsize=(8, 2 * num_rings), sharex=True, dpi=dpi)
         for i in range(num_rings):
             ax = axes[i] if num_rings > 1 else axes
             q_vals = q_data[i]
             mask = ~np.isnan(q_vals)
             ax.plot(chi_deg[mask], q_vals[mask], '.', markersize=3)
-            ax.set_title(f'Ring {i+1}')
+            # ax.set_title(f'Ring {i+1}')
             ax.set_ylabel(f'q (nm⁻¹)')
+            ax.set_ylim(np.mean(q_vals[mask])-0.05, np.mean(q_vals[mask])+0.05)
             ax.set_xlim(0, 360)
             
         axes[-1].set_xlabel('Azimuth χ (°)')
@@ -560,17 +562,17 @@ def plot_strain_vs_chi_stacked(file_path, output_dir=None, chi_deg=None, dpi=600
 
     if plot:
         import matplotlib.pyplot as plt
+        plt.rcParams.update({'font.size': 16})
         fig, axes = plt.subplots(num_rings, 1, figsize=(8, 2 * num_rings), sharex=True, dpi=dpi)
         for i in range(num_rings):
             ax = axes[i] if num_rings > 1 else axes
             vals = strain_data[i]
             mask = ~np.isnan(vals)
-            ax.plot(chi_deg[mask], vals[mask], '.', markersize=3)
-            ax.set_title(f'Ring {i+1}')
-            ax.set_ylabel('Strain')
+            ax.plot(chi_deg[mask], vals[mask]*1e6, '.', markersize=3)
+            # ax.set_title(f'Ring {i+1}')
+            ax.set_ylabel('Microstrain')
             ax.set_xlim(0, 360)
-            if calibrant:
-                ax.set_ylim(-0.0015, 0.0015)
+            ax.set_ylim(-1000, 1000)
         axes[-1].set_xlabel('Azimuth χ (°)')
         fig.tight_layout()
         scatter_path = os.path.join(output_dir, "strain_vs_chi_plot.png")
@@ -609,6 +611,9 @@ def fit_lattice_cone_distortion(q_data, q_errors, q0_chi_data, initial_q_guesses
     import matplotlib.pyplot as plt
     import statsmodels.api as sm
     logger = logger or logging.getLogger(__name__)
+    
+    plt.rcParams.update({'font.size': 16})
+
     os.makedirs(output_dir, exist_ok=True)
     # collect fitted strain-vs-chi curves for overlay
     fit_vs_chi = []
@@ -629,6 +634,7 @@ def fit_lattice_cone_distortion(q_data, q_errors, q0_chi_data, initial_q_guesses
 
     strain_params = []
     fig, axes = (plt.subplots(n_rings, 1, figsize=(10, 2 * n_rings), dpi=dpi, sharex=True) if plot else (None, None))
+    
     if plot and n_rings == 1: axes = [axes]
 
     # y limits for the strain vs chi plots
@@ -795,11 +801,15 @@ def fit_lattice_cone_distortion(q_data, q_errors, q0_chi_data, initial_q_guesses
 
             if plot:
                 ax = axes[i]
-                ax.plot(x, y_meas, '.', markersize=3, label='ln(q₀/q)')
-                ax.plot(x, results.fittedvalues, '-', label='Fit') # Use results.fittedvalues
-                ax.set_ylabel(f'{epsilon}=ln(q₀/q)')
-                ax.set_title(f'Ring {i+1} (q₀ = {q0_fixed:.4f} nm⁻¹)')
-                ax.legend(fontsize='small', loc='lower left', bbox_to_anchor=(1.02, 0.02))
+                ax.plot(x, y_meas*1e6, '.', markersize=3, label='ln(q₀/q)')
+                ax.plot(x, results.fittedvalues*1e6, '-', label='Fit') # Use results.fittedvalues
+                ax.set_ylabel('Microstrain')
+                # ax.set_ylabel(f'{epsilon}=ln(q₀/q)')
+                ax.set_ylim(-1000,1000)
+                ax.set_xlim(0, 360)
+                # ax.set_title(f'Ring {i+1} (q₀ = {q0_fixed:.4f} nm⁻¹)')
+                # ax.set_title(f'q₀ = {q0_fixed:.4f} nm⁻¹')
+                ax.legend(loc='lower left', bbox_to_anchor=(1.02, 0.02))
         
         except (ValueError, np.linalg.LinAlgError):
             if plot:
@@ -1362,9 +1372,7 @@ def generate_stress_maps_from_json(
 ):
     """
     Calculates stress from strain data in a JSON file and generates physically accurate stress maps.
-
     Assumes an isotropic, linear elastic material under a plane strain condition (eps_zz = 0).
-
     Args:
         json_path (str): Path to the input JSON file with strain data.
         youngs_modulus (float): Young's Modulus in GPa.
@@ -1388,25 +1396,22 @@ def generate_stress_maps_from_json(
     from matplotlib.ticker import FuncFormatter
     from matplotlib.cm import ScalarMappable
     from joblib import Parallel, delayed
-
     logger = logger or logging.getLogger(__name__)
     os.makedirs(output_dir, exist_ok=True)
-
     with open(json_path, 'r') as f:
         strain_data = json.load(f)
     
     # --- Strain to Stress Conversion using Hooke's Law for Isotropic Materials ---
     E = youngs_modulus * 1e9  # Convert GPa to Pa
     nu = poissons_ratio
-
     # Lamé parameters
     lam = (E * nu) / ((1 + nu) * (1 - 2 * nu))
     G = E / (2 * (1 + nu))  # Shear modulus
-
     stress_data = []
     for entry in strain_data:
         stress_tensors = []
         for strain_tensor in entry['strain_tensor']:
+            # Extract strain values
             eps_xx = strain_tensor.get('eps_xx', np.nan)
             eps_xy = strain_tensor.get('eps_xy', np.nan)
             eps_yy = strain_tensor.get('eps_yy', np.nan)
@@ -1440,7 +1445,6 @@ def generate_stress_maps_from_json(
     if num_points != n_rows * n_cols:
         raise ValueError(f"Grid dimension mismatch! JSON data points ({num_points}) do not match grid ({n_rows}x{n_cols}).")
     logger.info(f"Calculated stress for {num_points} points on a {n_rows}x{n_cols} grid.")
-
     num_rings = len(stress_data[0]) if stress_data else 0
     if gap_mm is None: gap_mm = 0.0
 
@@ -1484,7 +1488,6 @@ def generate_stress_maps_from_json(
                                  vmax=colorbar_scale[1] if colorbar_scale else data_max)
 
         pixel_width, pixel_height = pixel_size_map
-
         for i in range(n_rows):
             for j in range(n_cols):
                 val = data[i, j]
@@ -1516,7 +1519,6 @@ def generate_stress_maps_from_json(
         cb = fig.colorbar(sm, ax=ax, shrink=0.8, pad=0.05)
         cb.set_label('Stress (MPa)')
         cb.update_ticks()
-
         ax.set_title(title)
         ax.set_xlabel(f'X Position [{pixel_size_unit}]')
         ax.set_ylabel(f'Y Position [{pixel_size_unit}]')

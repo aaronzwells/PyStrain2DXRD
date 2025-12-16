@@ -32,35 +32,43 @@ def setup_logger(log_path, logger_name=None):
 # --- Main pipeline -------------------------------------------------------
 def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tensor_path=None):
     start_time = time.time()
-    poni_file     = "calibration/Calibration_Oct25_ceria_900mm_linkam_30C_att000_0006091.poni"
-    q0_reference_file = None #"ValidationOutputFiles/VB-APS-SSAO-6_25C_Map-AO_000304/q_vs_chi_peaks.txt"
-    tif_file      = "InputFiles/Reference_0Strain_inputs/VB_APS_SSAO_5_25C_Before_AO_0000907.tif"
-    mask_file     = "calibration/pilatus_mask.msk" # Either "path/to/your/mask.tif" or None
-    detector_type = "Pilatus" # "Pilatus" or "GE"
+    poni_file     = "calibration/Calibration_LaB6_100x100_3s_r8_mod2.poni"
+    q0_reference_file = "ValidationOutputFiles/VB-APS-SSAO-6_25C_Map-AO_000304_ref/q0_vs_chi_FITTED.txt"
+    tif_file      = "InputFiles/25C_AO_inputs/VB-APS-SSAO-6_25C_Map-AO_000304.avg.tiff"
+    mask_file     = None # "calibration/pilatus_mask.msk" # Either "path/to/your/mask.tif" or None
+    detector_type = "GE" # "Pilatus" or "GE"
     save_chi_files = False # this determines whether every q vs chi bin dataset is saved as a separate file or if the file writing is skipped
     save_adjusted_tif = True
-    mask_thresh   = 4e2 # UNUSED: minimum threshold value for the image mask
-    autocontrast_sensitivity = 0.5 # Defines the upper and lower bounds of the autocontrast; smaller is a more narrow intensity band
-    num_azim_bins = 120 # number of azimuthal bins around the data
+    mask_thresh   = None # Minimum threshold value for the image mask
+    autocontrast_sensitivity = 3.0 # Defines the upper and lower bounds of the autocontrast; smaller is a more narrow intensity band
+    num_azim_bins = 180 # number of azimuthal bins around the data
     q_min_nm1     = 14.0 # q_0 for binning of the data
     npt_rad       = 2048 # number of radial bins (~2-3x the radial pixel count)
     delta_tol     = 0.1 # default q-search width tolerance in nm^-1
     wavelength_nm = 0.1729786687 # [nm] X-ray wavelength
     solved_strain_components = 5 # This is the number of strain components to solve for in the system. # 3 = biaxial; 5 = biaxial w/ shear; 6 = all components
-    MAD_threshold = 3 # Threshold for median absolute deviation (MAD) filtering
-    initial_q_guesses = [
-                18.103087,
-                24.677268,
-                26.458500,
-                30.203330,
-                36.188437,
-                39.321810,
-                44.830282,
-                45.838482
+    MAD_threshold = 2 # Threshold for median absolute deviation (MAD) filtering
+    initial_q_guesses = [ # Al2O3 - 2.2025
+                17.961188,
+                24.500613,
+                26.267830,
+                29.974002,
+                35.926353,
+                39.034769,
+                44.513621,
+                45.514461
             ]
-    
-       
 
+    # initial_q_guesses = [ # LaB6 with some CeO2
+    #             15.111021,
+    #             20.105135,
+    #             21.370204,
+    #             26.171220,
+    #             30.222884,
+    #             33.791341,
+    #             37.018340,
+    #             45.341304,
+    #         ]
     tol_array   = np.array([ # tolerance values for q when searching for a peak to fit [nm^-1] for calibrant
         [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1], # larger q
         [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]]) # smaller q
