@@ -1,19 +1,15 @@
 calibration/*
 !calibration/*.poni
+!calibartion/*.msk
 InputFiles/*
 !InputFiles/Reference_0Strain_inputs
 OutputData/*
 OutputMaps*/
 !PeakFinding/Summary_Peak_Locations.txt
 __pycache__/
-<<<<<<< HEAD
-ValidationOutputFiles/
-.venv/
-=======
 ValidationOutputFiles/*
 pyfai-env/
 PeakFinding/*
 .venv/
 venv/
->>>>>>> origin
 .DS_Store

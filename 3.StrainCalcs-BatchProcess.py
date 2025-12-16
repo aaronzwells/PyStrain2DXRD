@@ -57,6 +57,7 @@ def batch_main_pipeline(config):
             save_adjusted_tif = config['save_adjusted_tif']
             tif_file = tif_path
             mask_thresh = config['mask_thresh']
+            autocontrast_sensitivity = config['autocontrast_sensitivity']
             num_azim_bins = config['num_azim_bins']
             q_min_nm1 = config['q_min_nm1']
             npt_rad = config['npt_rad']
@@ -80,7 +81,8 @@ def batch_main_pipeline(config):
                 mask_file=mask_file,
                 mask_threshold=mask_thresh,
                 logger=file_logger,
-                save_adjusted_tif=save_adjusted_tif
+                save_adjusted_tif=save_adjusted_tif,
+                autocontrast_sensitivity=autocontrast_sensitivity
             )
             
             if save_chi_files:
@@ -217,6 +219,7 @@ if __name__ == "__main__":
         'save_adjusted_tif': False, # toggles saving the adjusted TIF files
         'num_jobs_parallel': -2, # Uses all cores except for 1 to perform parallel calculations (-1 indicates using the maximum number of cores)
         'mask_thresh': 4e2, # mask minimum threshold for pixels; not used unless chosen; can be left at 4e2
+        'autocontrast_sensitivity': 1.5, # Defines the upper and lower bounds of the autocontrast; smaller is a more narrow intensity band
         'num_azim_bins': 120, # number of azimuthal bins for averaging the peaks
         'q_min_nm1': 14.0, # minimum q value for radial integration
         'npt_rad': 3000, # number of radial points from which to calculate peak centroids; ~2-3x radial pixel count
