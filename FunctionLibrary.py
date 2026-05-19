@@ -350,7 +350,7 @@ def integrate_2d(ai, data, mask, num_azim_bins=360, q_min=16.0, npt_rad=5000, ou
     logger = logger or logging.getLogger(__name__)
     logger.info("Running the integrate_2d() function")
     # Determine q_max from low-res integration
-    q_full = ai.integrate2d(data, 1, 1, unit="q_nm^-1").radial
+    q_full = ai.integrate2d(data, npt_rad, 1, unit="q_nm^-1").radial
     q_max = q_full[-1]
 
     # Perform the high-resolution 2D integration

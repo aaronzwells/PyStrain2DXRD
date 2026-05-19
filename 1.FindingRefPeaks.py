@@ -6,10 +6,10 @@ import pyFAI
 import fabio
 import os
 
-poni_file = "calibration/Calibration_LaB6_100x100_3s_r8_mod2.poni" # calibration PONI file
-tif_file = "calibration/ceria_lab6_exsitu_71p676keV_1145mm_100x100_3s_002265.avg.tif" # representative data TIF file
-detector_type = "GE" # "Pilatus" or "GE"
-mask_file = None #"calibration/pilatus_mask.msk" # Either "path/to/your/mask.tif" or None
+poni_file = "calibration/Calibration_Oct25_ceria_900mm_linkam_30C_att000_0006091.poni" # calibration PONI file
+tif_file = "InputFiles/Reference_0Strain_inputs/VB_APS_SSAO_5_25C_Before_AO_0000907.tif" # representative data TIF file
+detector_type = "Pilatus" # "Pilatus" or "GE"
+mask_file = "calibration/pilatus_mask.msk" # Either "path/to/your/mask.tif" or None
 
 def main(
         poni_file=poni_file, 
