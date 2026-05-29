@@ -7,7 +7,7 @@ import fabio
 import os
 
 poni_file = "calibration/Calibration_Oct25_ceria_900mm_linkam_30C_att000_0006091.poni" # calibration PONI file
-tif_file = "InputFiles/Reference_0Strain_inputs/VB_APS_SSAO_5_25C_Before_AO_0000907.tif" # representative data TIF file
+tif_file = "InputFiles/ceria_900mm_linkam_30C_att000/ceria_900mm_linkam_30C_att000_0006095.tif" # representative data TIF file
 detector_type = "Pilatus" # "Pilatus" or "GE"
 mask_file = "calibration/pilatus_mask.msk" # Either "path/to/your/mask.tif" or None
 
