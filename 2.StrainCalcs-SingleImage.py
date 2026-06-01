@@ -31,12 +31,25 @@ def setup_logger(log_path, logger_name=None):
 
 # --- Main pipeline -------------------------------------------------------
 def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tensor_path=None):
-    start_time = time.time()
-    poni_file     = "calibration/Calibration_Oct25_ceria_900mm_linkam_30C_att000_0006091.poni"
-    q0_reference_file = None #"ValidationOutputFiles/VB-APS-SSAO-6_25C_Map-AO_000304_ref/q0_vs_chi_FITTED.txt"
-    tif_file      = "InputFiles/Reference_0Strain_inputs/VB_APS_SSAO_5_25C_Before_AO_0000907.tif"
-    mask_file     = "calibration/pilatus_mask.msk" # "calibration/pilatus_mask.msk" # Either "path/to/your/mask.tif" or None
+
+    #Sample 6: February Dataset
+    #Samples 5, 3, 2: October Dataset
+    
+    #OCTOBER 2025 BEAMTIME CALIBRATION PARAMETERS: 
+    poni_file = "calibration/Calibration_Oct25_ceria_900mm_linkam_30C_att000_0006091.poni" # calibration PONI file. I used CeO2 
     detector_type = "Pilatus" # "Pilatus" or "GE"
+    mask_file = "calibration/pilatus_mask.msk" # Either "path/to/your/mask.tif" or None
+    
+    #FEBRUARY 2025 BEAMTIME CALIBRATION PARAMETERS: (This calibration gives incorrect CeO2 rm. temp values! But is what Aaron used.)
+    # poni_file = "calibration/Calibration_LaB6_100x100_3s_r8_mod2.poni" # calibration PONI file. Aaron used LaB6
+    # detector_type = "GE" # "Pilatus" or "GE"
+    # mask_file = None
+
+    #FEM Zero strain position of the current map. Use None if you are analyzing the zero strain position
+    q0_reference_file = None #"ValidationOutputFiles/VB-APS-SSAO-6_25C_Map-AO_000304_ref/q0_vs_chi_FITTED.txt"  
+    tif_file      = "InputFiles/Reference_0Strain_inputs/VB_APS_SSAO_5_25C_Before_AO_0000907.tif"
+    
+    start_time = time.time()
     save_chi_files = False # this determines whether every q vs chi bin dataset is saved as a separate file or if the file writing is skipped
     save_adjusted_tif = True
     mask_thresh   = None # Minimum threshold value for the image mask
@@ -59,7 +72,7 @@ def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tenso
     #             45.514461
     #         ]
 
-    initial_q_guesses = [ # Oct. Al2O3
+    initial_q_guesses = [ # October 2025 Al2O3
                 18.103087,
                 24.677268,
                 26.458500,
