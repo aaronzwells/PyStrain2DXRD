@@ -1,3 +1,5 @@
+"""Integrate 2D diffraction patterns and find peaks for a single image"""
+
 import FunctionLibrary as fl
 import numpy as np
 import matplotlib.pyplot as plt
@@ -7,7 +9,7 @@ import fabio
 import os
 
 poni_file = "calibration/Calibration_Oct25_ceria_900mm_linkam_30C_att000_0006091.poni" # calibration PONI file
-tif_file = "InputFiles/ceria_900mm_linkam_30C_att000/ceria_900mm_linkam_30C_att000_0006095.tif" # representative data TIF file
+tif_file = "InputFiles/ceria_900mm_linkam_800C_att000/ceria_900mm_linkam_800C_att000_0006121.tif" # representative data TIF file
 detector_type = "Pilatus" # "Pilatus" or "GE"
 mask_file = "calibration/pilatus_mask.msk" # Either "path/to/your/mask.tif" or None
 
