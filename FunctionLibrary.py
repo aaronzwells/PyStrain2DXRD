@@ -1,3 +1,4 @@
+from matplotlib import ticker
 import numpy as np
 from scipy.signal import find_peaks, peak_widths
 from scipy.optimize import curve_fit
@@ -438,6 +439,37 @@ def integrate_2d(ai, data, mask, num_azim_bins=360, q_min=16.0, npt_rad=5000, ou
         logger.info(f"Stacked q vs chi plot saved to: {fig_filename}")
 
     return I2d, q, chi
+
+def plot_binned_patterns_from_2d_integration(I2d, q, chi, output_dir=None, logger=None):
+    """
+    Plots the binned patterns from the 2D integration results for examination.
+
+    Args:
+        I2d (np.ndarray): 2D array of intensities [azimuthal_bin x radial_bin].
+        q (np.ndarray): 1D array of radial q values.
+        chi (np.ndarray): 1D array of azimuthal chi values.
+        output_dir (str, optional): Directory to save the plots. Defaults to None.
+        logger (logging.Logger, optional): Logger for status messages. Defaults to None.
+    """
+    import matplotlib.pyplot as plt
+    logger = logger or logging.getLogger(__name__)
+
+    for i, chi_val in enumerate(chi):
+        plt.figure(figsize=(5, 3))
+        plt.plot(q, I2d[i], label=f"Chi = {chi_val:.1f} deg", linewidth = 1.0, color = 'k')
+        plt.xlabel("q (nm^-1)")
+        plt.ylabel("Intensity (a.u.)")
+        plt.title(f"Binned Pattern at Chi = {chi_val:.1f} deg")
+        plt.legend()
+        ax = plt.gca()
+        ax.xaxis.set_major_locator(ticker.MultipleLocator(10))
+        ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(5))
+        ax.set_xlim(10,90)
+        if output_dir:
+            plt.savefig(os.path.join(output_dir, f"binned_pattern_chi_{chi_val:.1f}.png"), dpi=300)
+        plt.close()
+
+    logger.info(f"Plotted binned patterns for {len(chi)} bins. Plots saved to: {output_dir}")
 
 def fit_peaks_with_initial_guesses(I2d, chi, q, q_peaks, delta_tol=0.07, eta0=0.5, n_jobs=-1, delta_array=None, output_dir=None, logger=None):
     """

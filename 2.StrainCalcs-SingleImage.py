@@ -68,12 +68,8 @@ def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tenso
     solved_strain_components = 5 # This is the number of strain components to solve for in the system. # 3 = biaxial; 5 = biaxial w/ shear; 6 = all components
     MAD_threshold = 2 # Threshold for median absolute deviation (MAD) filtering
 
-    #PARAMETERS FOR "EXAMINE BINS" TO TROUBLESHOOT BINNED PEAK POSITION (e.g., Pilatus dead zones)
-    examine_bins = False # this determines whether azimuthal bins are examined for bad fits (should be False once we have confidence in the binned fit behavior)
-    height_frac = 0.3 # minimum height of peaks to be considered for fitting, as a fraction of the maximum intensity in the bin
-    distance = 20 # minimum distance between peaks to be considered separate, in number of data points
-    q_min = 18 # minimum q value for fitting
-    q_max = 60 # maximum q value for fitting
+    #Examine bins: Now a bare bones option to just look at the plotted binned data to make sure "2d" integration looks reasonable
+    examine_bins = True 
 
     # initial_q_guesses = [ # February 2025 Al2O3 with Aaron calibration (positions may not be accurate)
     #             17.961188,
@@ -159,26 +155,8 @@ def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tenso
 
     #Performs an analysis similar to script 1 on each bin, if examine_bins is true
     if examine_bins:
-        # Creates output directory for the binned data if there isn't one already
-        binned_plot_path = fl.create_directory(f"{output_path}/BinnedPlots", logger=file_logger)
-
-        import matplotlib.pyplot as plt
-        from matplotlib import ticker
-        binned_peaks = fl.fit_peak_centroids_binned(q, I2d, q_min=q_min, q_max=q_max, height_frac=height_frac, distance=distance)
-        for i in range(I2d.shape[0]):
-            plt.figure(figsize=(5, 3))
-            plt.plot(q, I2d[i, :], label='Integrated pattern', linewidth=1.0, color='k')
-            plt.plot(binned_peaks[i, :], [np.interp(p, q, I2d[i, :]) for p in binned_peaks[i, :]], 'rx', label='Fitted Peaks')
-            plt.xlabel("q [nm$^{-1}$]")
-            plt.ylabel("Intensity [a.u.]")
-            plt.title(f"Bin {i+1}: Mid Azimuth Position {chi[i]:.1f}°")
-            ax = plt.gca()
-            ax.xaxis.set_major_locator(ticker.MultipleLocator(10))
-            ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(5))
-            ax.set_xlim(10,90)
-            plt.tight_layout()
-            plt.savefig(f"{binned_plot_path}/peak_detection_plot_bin_{i+1}.png", dpi=300)
-            plt.close()
+        fl.plot_binned_patterns_from_2d_integration(I2d, q, chi, output_dir=chi_path, logger=file_logger)
+        #Put the plots in the same ChiOutput folder
 
     # Fits the q vs χ data to the Pseudo-Voigt function to find the peak centroids for each bin and ring
     q_vs_chi, q_vs_chi_errors, q_chi_path = fl.fit_peaks_with_initial_guesses(
