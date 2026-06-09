@@ -1,3 +1,5 @@
+"""Azimuthal binning of data and fitting cone distortion for a single pattern """
+
 import logging
 import FunctionLibrary as fl
 import time
@@ -34,6 +36,8 @@ def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tenso
 
     #Sample 6: February Dataset
     #Samples 5, 3, 2: October Dataset
+
+    start_time = time.time()
     
     #OCTOBER 2025 BEAMTIME CALIBRATION PARAMETERS: 
     poni_file = "calibration/Calibration_Oct25_ceria_900mm_linkam_30C_att000_0006091.poni" # calibration PONI file. I used CeO2 
@@ -47,21 +51,31 @@ def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tenso
 
     #FEM Zero strain position of the current map. Use None if you are analyzing the zero strain position
     q0_reference_file = None #"ValidationOutputFiles/VB-APS-SSAO-6_25C_Map-AO_000304_ref/q0_vs_chi_FITTED.txt"  
-    tif_file      = "InputFiles/Reference_0Strain_inputs/VB_APS_SSAO_5_25C_Before_AO_0000907.tif"
     
-    start_time = time.time()
-    save_chi_files = False # this determines whether every q vs chi bin dataset is saved as a separate file or if the file writing is skipped
+    #The single image you are analyzing for strain data 
+    tif_file      = "InputFiles/Oct2025_linkam_temperature_calib/ceria_900mm_linkam_30C_att000/ceria_900mm_linkam_30C_att000_0006092.tif"
+    
+    #ORIGINAL SCRIPT PARAMETERS
+    save_chi_files = True # this determines whether every q vs chi bin dataset is saved as a separate file or if the file writing is skipped
     save_adjusted_tif = True
     mask_thresh   = None # Minimum threshold value for the image mask
     autocontrast_sensitivity = 0.5 # Defines the upper and lower bounds of the autocontrast; smaller is a more narrow intensity band
-    num_azim_bins = 120 # number of azimuthal bins around the data
+    num_azim_bins = 120 # number of azimuthal bins around the data (so each bin is 360/num_azim_bins degrees wide)
     q_min_nm1     = 14.0 # q_0 for binning of the data
     npt_rad       = 2048 # number of radial bins (~2-3x the radial pixel count)
     delta_tol     = 0.1 # default q-search width tolerance in nm^-1
     wavelength_nm = 0.1729786687 # [nm] X-ray wavelength
     solved_strain_components = 5 # This is the number of strain components to solve for in the system. # 3 = biaxial; 5 = biaxial w/ shear; 6 = all components
     MAD_threshold = 2 # Threshold for median absolute deviation (MAD) filtering
-    # initial_q_guesses = [ # Al2O3 - 2.2025
+
+    #PARAMETERS FOR "EXAMINE BINS" TO TROUBLESHOOT BINNED PEAK POSITION (e.g., Pilatus dead zones)
+    examine_bins = False # this determines whether azimuthal bins are examined for bad fits (should be False once we have confidence in the binned fit behavior)
+    height_frac = 0.3 # minimum height of peaks to be considered for fitting, as a fraction of the maximum intensity in the bin
+    distance = 20 # minimum distance between peaks to be considered separate, in number of data points
+    q_min = 18 # minimum q value for fitting
+    q_max = 60 # maximum q value for fitting
+
+    # initial_q_guesses = [ # February 2025 Al2O3 with Aaron calibration (positions may not be accurate)
     #             17.961188,
     #             24.500613,
     #             26.267830,
@@ -72,19 +86,31 @@ def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tenso
     #             45.514461
     #         ]
 
-    initial_q_guesses = [ # October 2025 Al2O3
-                18.103087,
-                24.677268,
-                26.458500,
-                30.203330,
-                36.188437,
-                39.321810,
-                44.830282,
-                45.838482
+    # initial_q_guesses = [ # October 2025 Al2O3
+    #             18.103087,
+    #             24.677268,
+    #             26.458500,
+    #             30.203330,
+    #             36.188437,
+    #             39.321810,
+    #             44.830282,
+    #             45.838482
+    #         ]
+    
+    initial_q_guesses = [ # October 2025 CeO2 Calibrant, Room Temp
+                20.108632,
+                23.220192,
+                32.840341,
+                38.507202,
+                40.219511,
+                50.611331,
+                51.926886,
+                56.885665
             ]
+  
     tol_array   = np.array([ # tolerance values for q when searching for a peak to fit [nm^-1] for calibrant
-        [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1], # larger q
-        [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]]) # smaller q
+        [1, 1, 1, 1, 1, 1, 1, 1], # larger q
+        [1, 1, 1, 1, 1, 1, 1, 1]]) # smaller q
     eta0          = 0.5
     
     # This removes the file extension and .avg from the end of the averaged image files
@@ -131,9 +157,33 @@ def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tenso
         logger=file_logger
     )
 
+    #Performs an analysis similar to script 1 on each bin, if examine_bins is true
+    if examine_bins:
+        # Creates output directory for the binned data if there isn't one already
+        binned_plot_path = fl.create_directory(f"{output_path}/BinnedPlots", logger=file_logger)
+
+        import matplotlib.pyplot as plt
+        from matplotlib import ticker
+        binned_peaks = fl.fit_peak_centroids_binned(q, I2d, q_min=q_min, q_max=q_max, height_frac=height_frac, distance=distance)
+        for i in range(I2d.shape[0]):
+            plt.figure(figsize=(5, 3))
+            plt.plot(q, I2d[i, :], label='Integrated pattern', linewidth=1.0, color='k')
+            plt.plot(binned_peaks[i, :], [np.interp(p, q, I2d[i, :]) for p in binned_peaks[i, :]], 'rx', label='Fitted Peaks')
+            plt.xlabel("q [nm$^{-1}$]")
+            plt.ylabel("Intensity [a.u.]")
+            plt.title(f"Bin {i+1}: Mid Azimuth Position {chi[i]:.1f}°")
+            ax = plt.gca()
+            ax.xaxis.set_major_locator(ticker.MultipleLocator(10))
+            ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(5))
+            ax.set_xlim(10,90)
+            plt.tight_layout()
+            plt.savefig(f"{binned_plot_path}/peak_detection_plot_bin_{i+1}.png", dpi=300)
+            plt.close()
+
     # Fits the q vs χ data to the Pseudo-Voigt function to find the peak centroids for each bin and ring
     q_vs_chi, q_vs_chi_errors, q_chi_path = fl.fit_peaks_with_initial_guesses(
         I2d, 
+        chi,
         q, 
         initial_q_guesses, 
         delta_tol=delta_tol, 

@@ -47,8 +47,8 @@ def main(
 
     # Load image data from .tif
     image = fabio.open(tif_file).data
-    image = np.flipud(image) if detector_type == "Pilatus" else image   # Flip the image vertically - MATCHES Oct. 25 CALIBRATION
-
+    # EXTREMELY IMPORTANT: Flip the image vertically for Pilatus detector: MATCHES Oct. 25 CALIBRATION
+    image = np.flipud(image) if detector_type == "Pilatus" else image   
 
     # Load mask if provided
     if mask_file:

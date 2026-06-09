@@ -106,6 +106,55 @@ def fit_peak_centroids(x_data, y_data, height_frac=0.1, distance=20, eta0=0.5, d
     # The function now only calculates and returns the peak positions.
     return peak_positions
 
+def fit_peak_centroids_binned(x_data, y_data, q_min, q_max, height_frac=0.1, distance=20, eta0=0.5, delta_tol=0.1, logger=None):
+    """
+    A wrapper function to fit peak centroids for binned data. This is to support an analysis similar to script 1 but for binned data.
+    To look for bad fits around the azimuth (e.g., near Pilatus dead zones)
+
+    This function is designed to handle cases where the input data is already
+    binned (e.g., from a 2D integration) and applies the same peak fitting
+    logic as `fit_peak_centroids` to each bin.
+
+    Args:
+        x_data (np.ndarray): The dispersive axis data (e.g., q or 2-theta).
+        y_data (np.ndarray): The intensity data, expected to be 2D with shape (n_bins, n_points).
+        q_min (float): Minimum q value for the fitting range.
+        q_max (float): Maximum q value for the fitting range.
+        height_frac (float, optional): Minimum peak height as a fraction of the
+            maximum intensity. Defaults to 0.1.
+        distance (int, optional): Minimum horizontal distance (in data points)
+            between neighboring peaks. Defaults to 20.
+        eta0 (float, optional): Initial guess for the eta (mixing) parameter of
+            the pseudo-Voigt profile. Defaults to 0.5.
+        delta_tol (float, optional): Tolerance for the peak center during fitting,
+            defining the bounds relative to the initial guess. Defaults to 0.1.
+        logger (logging.Logger, optional): Logger for status messages. Defaults to None.
+
+    Returns:
+        list: A list of lists containing fitted centroid positions for each bin.
+    """
+    logger = logger or logging.getLogger(__name__)
+    n_bins = y_data.shape[0] 
+    max_num_peaks = 8             # Rigid column limit
+
+    all_peak_positions = np.full((n_bins, max_num_peaks), np.nan)
+    # Iterate through each azimuthal bin to perform peak fitting
+    for i in range(n_bins):
+        x_data_trimmed = x_data[(x_data >= q_min) & (x_data <= q_max)] #protect integrity of peak ID by trimming high background region
+        y_data_trimmed_bin = y_data[i][(x_data >= q_min) & (x_data <= q_max)]
+        peaks = fit_peak_centroids(x_data_trimmed, y_data_trimmed_bin, height_frac, distance, eta0, delta_tol, logger)
+        peaks_list = list(peaks)
+        
+        # Truncate if it exceeds 8 peaks to protect array boundaries
+        # If peaks_list has fewer than 8 items, the remaining slots stay np.nan
+        if len(peaks_list) > max_num_peaks:
+            peaks_list = peaks_list[:max_num_peaks]
+
+        all_peak_positions[i, :len(peaks_list)] = peaks_list
+    
+    all_peak_positions = np.array(all_peak_positions)
+    return all_peak_positions
+
 # --- Utility: Convert 2theta from initial fit check into q-space
 def convert_2theta_to_q(file_path, wavelength_nm):
     """
@@ -379,7 +428,7 @@ def integrate_2d(ai, data, mask, num_azim_bins=360, q_min=16.0, npt_rad=5000, ou
     if save_chi_files:
         for i, chi_val in enumerate(chi):
             chi_deg = chi_val
-            filename = os.path.join(output_dir, f"azim_{int(round(chi_deg))}deg.chi")
+            filename = os.path.join(output_dir, f"mid_azim_{chi_deg:.1f}deg.chi")
             with open(filename, 'w') as f:
                 f.write(f"# Azimuthal bin: {chi_deg:.2f} deg\n")
                 f.write("# Columns: q (nm^-1), Intensity (a.u.)\n")
@@ -390,13 +439,13 @@ def integrate_2d(ai, data, mask, num_azim_bins=360, q_min=16.0, npt_rad=5000, ou
 
     return I2d, q, chi
 
-def fit_peaks_with_initial_guesses(I2d, q, q_peaks, delta_tol=0.07, eta0=0.5, n_jobs=-1, delta_array=None, output_dir=None, logger=None):
+def fit_peaks_with_initial_guesses(I2d, chi, q, q_peaks, delta_tol=0.07, eta0=0.5, n_jobs=-1, delta_array=None, output_dir=None, logger=None):
     """
     Fits each azimuthal slice of I2d using initial q peak guesses and the pseudo-Voigt function.
     This function uses parallel processing to speed up the fitting process.
 
     Args:
-        I2d (np.ndarray): 2D array of intensities [azimuthal_bin x radial_bin].
+        I2d (np.ndarray): 2D array of intensities [azimuthal_bin x radial_bin]. (i.e., a series of 1D patterns at each azimuth. NOT 2D .tif data)
         q (np.ndarray): 1D array of radial q values.
         q_peaks (list or np.ndarray): Initial guesses for peak positions (q0).
         delta_tol (float, optional): Symmetric tolerance for the fit window around q0. Defaults to 0.07.
@@ -439,15 +488,16 @@ def fit_peaks_with_initial_guesses(I2d, q, q_peaks, delta_tol=0.07, eta0=0.5, n_
                 errors_out.append(np.nan)
                 continue
 
+  
             try:
                 # Perform the curve fit
                 # bg_const_guess = np.min(y) # Guess the background is at the minimum intensity in the window
                 # p0 = [np.max(y) - bg_const_guess, q0, wid0, eta0, bg_const_guess]
-                p0 = [np.max(y), q0, wid0, eta0]
+                p0 = [np.max(y), q0, wid0, eta0] #The pseudo voigt parameters
                 bounds = ([-np.inf, q0 - tol_dn, 0, 0], 
                           [np.inf, q0 + tol_up, np.inf, 1])
                 
-                popt, pcov = curve_fit(pseudo_voigt, x, y, p0=p0, bounds=bounds)
+                popt, pcov = curve_fit(pseudo_voigt, x, y, p0=p0, bounds=bounds) #These are the pseudo voigt parameters, optimized
                 
                 # Extract fitted parameters and their standard errors
                 perr = np.sqrt(np.diag(pcov))
@@ -467,6 +517,7 @@ def fit_peaks_with_initial_guesses(I2d, q, q_peaks, delta_tol=0.07, eta0=0.5, n_
                 logger.debug(f"Fit failed for peak index {i} in azimuthal bin.")
                 centroids_out.append(np.nan)
                 errors_out.append(np.nan)
+
         return centroids_out, errors_out
 
     # Run the fitting in parallel for all azimuthal slices
