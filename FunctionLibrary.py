@@ -182,6 +182,11 @@ def convert_2theta_to_q(file_path, wavelength_nm):
 # --- ImageJ-based autocontrast function ---------------------------------
 def imagej_autocontrast(image, k=3.0):
     """
+    USE WITH EXTREME CAUTION. 
+    This function modifies the image data directly.
+    Outputs are ONLY appropriate for visualization purposes, i.e., a figure of the 2D pattern.
+    Outputs cannot serve as data to be integrated, either 1D or 2D, without risking severe peak truncation. 
+
     Adjusts the image contrast based on its statistics, similar to ImageJ's auto-contrast.
 
     The display range is set to `mean ± k * std_dev`.
@@ -246,8 +251,8 @@ def load_integrator_and_data(poni_path, tif_path, output_path, detector_type, ma
         logger (logging.Logger, optional): Logger for status messages. Defaults to None.
 
     Returns:
-        tuple: A tuple containing (ai, data_adj, mask), where `ai` is the AzimuthalIntegrator,
-               `data_adj` is the contrast-adjusted image data, and `mask` is the 
+        tuple: A tuple containing (ai, unaltered_image_data, mask), where `ai` is the AzimuthalIntegrator,
+               `unaltered_image_data` is the unaltered image data (CRITICAL TO REMAIN UNALTERED), and `mask` is the 
                boolean mask array (True = masked/bad).
     """
     logger = logger or logging.getLogger(__name__)    
@@ -255,18 +260,18 @@ def load_integrator_and_data(poni_path, tif_path, output_path, detector_type, ma
     # Load calibrant and raw image
     ai  = pyFAI.load(poni_path)
     img = fabio.open(tif_path).data
-    img = np.flipud(img) if detector_type == "Pilatus" else img # Flip the image vertically for Pilatus - MATCHES Oct. 25 CALIBRATION
-    data = img.astype(np.float32)
+    img = np.flipud(img) if detector_type == "Pilatus" else img # CRITICAL: Flip the image vertically for Pilatus - MATCHES Oct. 25 CALIBRATION
+    unaltered_image_data = img.astype(np.float32) # Emphasize the image data must remain unaltered before binned integration. 
 
-    # Contrast adjustment using ImageJ-style autocontrast (wider dynamic range)
-    data_adj = imagej_autocontrast(data, k=autocontrast_sensitivity)
+    # Contrast adjustment using ImageJ-style autocontrast (wider dynamic range). FOR VISUALIZATION ONLY. 
+    data_adj = imagej_autocontrast(unaltered_image_data, k=autocontrast_sensitivity)
 
     if save_adjusted_tif:
-        # Save adjusted TIF alongside the original
+        # Save adjusted TIF of the 2D pattern alongside the original
         base, ext = os.path.splitext(tif_path)
         filename = os.path.basename(base)
         adjusted_path = f"{output_path}/{filename}_adjusted{ext}"
-        imageio.imwrite(adjusted_path, data_adj)
+        imageio.imwrite(adjusted_path, data_adj) # This is the ONLY place is is okay to use data_adj. ONLY for saving the adjusted image. 
         logger.info(f"Adjusted image saved to: {adjusted_path}")
     else:
         logger.info(f"Adjusted image not saved.")
@@ -288,7 +293,7 @@ def load_integrator_and_data(poni_path, tif_path, output_path, detector_type, ma
     # 2. Apply threshold mask (hot pixels)
     if mask_threshold is not None:
         # Mask pixels *below* the threshold
-        threshold_mask = data > mask_threshold
+        threshold_mask = unaltered_image_data > mask_threshold  #When revisiting GE-detector data, may want to verify this is not causing undue truncation.
         logger.info(f"Generated threshold mask for intensity < {mask_threshold}")
         
         if final_mask is not None:
@@ -301,14 +306,14 @@ def load_integrator_and_data(poni_path, tif_path, output_path, detector_type, ma
     if final_mask is None:
         logger.info("No mask was applied.")
 
-    return ai, data_adj, final_mask
+    return ai, unaltered_image_data, final_mask #CRITICAL: return unaltered image data
 
 def load_and_prep_image(tif_path, output_path, mask_file=None, mask_threshold=4e2, logger=None, save_adjusted_tif=True, autocontrast_sensitivity = 3.0):
     """
     Loads and prepares a single TIFF image for integration.
 
     This function is designed for batch processing where the pyFAI integrator
-    is already loaded. It performs contrast adjustment and saves the adjusted image.
+    is already loaded. It performs contrast adjustment and saves the adjusted image.   #BS: This explains the difference
 
     Args:
         tif_path (str): Path to the input TIFF image.
@@ -319,23 +324,23 @@ def load_and_prep_image(tif_path, output_path, mask_file=None, mask_threshold=4e
         logger (logging.Logger, optional): Logger for status messages. Defaults to None.
 
     Returns:
-        tuple: A tuple containing (data_adj, mask), where `data_adj` is the
-               contrast-adjusted image data, and `mask` is the boolean mask array
+        tuple: A tuple containing (unaltered_image_data, mask), where `unaltered_image_data` is the
+               original image data (AGAIN, CRITICAL TO REMAIN UNALTERED), and `mask` is the boolean mask array
                (True = masked/bad).
     """
     logger = logger or logging.getLogger(__name__)
 
     # Load and process the image data
     img = fabio.open(tif_path)
-    data = img.data.astype(np.float32)
-    data_adj = imagej_autocontrast(data, k=autocontrast_sensitivity)
+    unaltered_image_data = img.data.astype(np.float32)
+    data_adj = imagej_autocontrast(unaltered_image_data, k=autocontrast_sensitivity)
 
     if save_adjusted_tif:
         # Save the adjusted image
         base, ext = os.path.splitext(tif_path)
         filename = os.path.basename(base)
         adjusted_path = f"{output_path}/{filename}_adjusted{ext}"
-        imageio.imwrite(adjusted_path, data_adj)
+        imageio.imwrite(adjusted_path, data_adj) # This is the ONLY place is is okay to use data_adj. ONLY for saving the adjusted image.
         logger.info(f"Adjusted image saved to: {adjusted_path}")
     else: 
         logger.info(f"Adjusted image not saved.")
@@ -420,7 +425,7 @@ def integrate_2d(ai, data, mask, num_azim_bins=360, q_min=16.0, npt_rad=5000, ou
         I2d = I2d.T
 
     # Normalize chi to the range [0, 360) and sort the data accordingly
-    chi = (chi + 360) % 360
+    chi = (chi + 360) % 360 #confirmed this is starting from east
     order = np.argsort(chi)
     chi = chi[order]
     I2d = I2d[order]
@@ -460,13 +465,13 @@ def plot_binned_patterns_from_2d_integration(I2d, q, chi, output_dir=None, logge
         plt.xlabel("q (nm^-1)")
         plt.ylabel("Intensity (a.u.)")
         plt.title(f"Binned Pattern at Chi = {chi_val:.1f} deg")
-        plt.legend()
+        #plt.legend()
         ax = plt.gca()
         ax.xaxis.set_major_locator(ticker.MultipleLocator(10))
         ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(5))
         ax.set_xlim(10,90)
         if output_dir:
-            plt.savefig(os.path.join(output_dir, f"binned_pattern_chi_{chi_val:.1f}.png"), dpi=300)
+            plt.savefig(os.path.join(output_dir, f"binned_pattern_chi_{chi_val:.1f}.png"), dpi=300, bbox_inches='tight')
         plt.close()
 
     logger.info(f"Plotted binned patterns for {len(chi)} bins. Plots saved to: {output_dir}")

@@ -75,7 +75,8 @@ def batch_main_pipeline(config):
             outputPath = os.path.join(output_directory, filename_noext)
             output_path = fl.create_directory(outputPath, logger=file_logger)
 
-            data, mask = fl.load_and_prep_image( # loads and masks the TIFF for analysis
+            #BS June 2026: How is this different from the load_integrator_and_data function? For now, correcting both to return unaltered image data.
+            ai, data, mask = fl.load_and_prep_image( # loads and masks the TIFF for analysis.
                 tif_file,
                 output_path=output_path,
                 mask_file=mask_file,

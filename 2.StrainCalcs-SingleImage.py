@@ -53,7 +53,9 @@ def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tenso
     q0_reference_file = None #"ValidationOutputFiles/VB-APS-SSAO-6_25C_Map-AO_000304_ref/q0_vs_chi_FITTED.txt"  
     
     #The single image you are analyzing for strain data 
-    tif_file      = "InputFiles/Oct2025_linkam_temperature_calib/ceria_900mm_linkam_30C_att000/ceria_900mm_linkam_30C_att000_0006092.tif"
+    tif_file      = "InputFiles/Oct2025_linkam_temperature_calib/ceria_900mm_linkam_30C_att000/ceria_900mm_linkam_30C_att000_0006092.tif" #OCTOBER CALIBRANT
+    # tif_file      = "InputFiles/Feb2025_Calibrant_Patterns/Feb2025_ceria_71p767keV_1145mm_100x100_3s_000112.avg.tiff". #FEBRUARY CERIA ONLY CALIBRANT
+
     
     #ORIGINAL SCRIPT PARAMETERS
     save_chi_files = True # this determines whether every q vs chi bin dataset is saved as a separate file or if the file writing is skipped
@@ -82,7 +84,7 @@ def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tenso
     #             45.514461
     #         ]
 
-    # initial_q_guesses = [ # October 2025 Al2O3
+    # initial_q_guesses = [ # October 2025 Al2O3 (These peak positions should ultimately be correct, based on calibrant matching)
     #             18.103087,
     #             24.677268,
     #             26.458500,
@@ -91,6 +93,18 @@ def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tenso
     #             39.321810,
     #             44.830282,
     #             45.838482
+    #         ]
+
+    # initial_q_guesses = [ # February 2025 CeO2 Calibrant, Room Temp (This are WRONG ceria positions, but using them to run the script
+    #                         #to verify binned intensity issue is pervasive)
+    #                 19.973575,	
+    #                 23.063715,	
+    #                 32.620258,	
+    #                 38.253129,	
+    #                 39.954924,	
+    #                 50.284085,	
+    #                 51.591647,	
+    #                 56.521486,	
     #         ]
     
     initial_q_guesses = [ # October 2025 CeO2 Calibrant, Room Temp
