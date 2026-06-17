@@ -11,6 +11,9 @@ import multiprocessing
 import pyFAI, fabio
 import FunctionLibrary as fl # This is the REQUIRED custom library for this analysis.
 
+#Sample 6: February Dataset
+#Samples 5, 3, 2: October Dataset
+
 # Batch processing for all .tif files in the defined input directory
 def batch_main_pipeline(config):
     n_jobs = config['num_jobs_parallel']

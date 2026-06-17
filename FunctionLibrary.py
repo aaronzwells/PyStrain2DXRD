@@ -271,7 +271,7 @@ def load_integrator_and_data(poni_path, tif_path, output_path, detector_type, ma
         base, ext = os.path.splitext(tif_path)
         filename = os.path.basename(base)
         adjusted_path = f"{output_path}/{filename}_adjusted{ext}"
-        imageio.imwrite(adjusted_path, data_adj) # This is the ONLY place is is okay to use data_adj. ONLY for saving the adjusted image. 
+        imageio.imwrite(adjusted_path, data_adj) # This is the ONLY place it is okay to use data_adj. ONLY for saving the adjusted image. 
         logger.info(f"Adjusted image saved to: {adjusted_path}")
     else:
         logger.info(f"Adjusted image not saved.")
@@ -332,7 +332,9 @@ def load_and_prep_image(tif_path, output_path, mask_file=None, mask_threshold=4e
 
     # Load and process the image data
     img = fabio.open(tif_path)
-    unaltered_image_data = img.data.astype(np.float32)
+    unaltered_image_data = img.data.astype(np.float32) # Emphasize the image data must remain unaltered before binned integration. 
+
+    # Contrast adjustment using ImageJ-style autocontrast (wider dynamic range). FOR VISUALIZATION ONLY. 
     data_adj = imagej_autocontrast(unaltered_image_data, k=autocontrast_sensitivity)
 
     if save_adjusted_tif:
@@ -340,7 +342,7 @@ def load_and_prep_image(tif_path, output_path, mask_file=None, mask_threshold=4e
         base, ext = os.path.splitext(tif_path)
         filename = os.path.basename(base)
         adjusted_path = f"{output_path}/{filename}_adjusted{ext}"
-        imageio.imwrite(adjusted_path, data_adj) # This is the ONLY place is is okay to use data_adj. ONLY for saving the adjusted image.
+        imageio.imwrite(adjusted_path, data_adj) # This is the ONLY place it is okay to use data_adj. ONLY for saving the adjusted image.
         logger.info(f"Adjusted image saved to: {adjusted_path}")
     else: 
         logger.info(f"Adjusted image not saved.")
@@ -375,7 +377,7 @@ def load_and_prep_image(tif_path, output_path, mask_file=None, mask_threshold=4e
     if final_mask is None:
         logger.info("No mask was applied.")
 
-    return data_adj, final_mask
+    return unaltered_image_data, final_mask   #CRITICAL: return unaltered image data
 
 def integrate_2d(ai, data, mask, num_azim_bins=360, q_min=16.0, npt_rad=5000, output_dir=None, save_chi_files=False, logger=None):
     """
