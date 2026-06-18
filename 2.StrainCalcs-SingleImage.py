@@ -42,21 +42,24 @@ def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tenso
     start_time = time.time()
     
     #OCTOBER 2025 BEAMTIME CALIBRATION PARAMETERS: 
-    # poni_file = "calibration/Calibration_Oct25_ceria_900mm_linkam_30C_att000_0006091.poni" # calibration PONI file. I used CeO2 
-    # detector_type = "Pilatus" # "Pilatus" or "GE"
-    # mask_file = "calibration/pilatus_mask.msk" # Either "path/to/your/mask.tif" or None
+    poni_file = "calibration/Calibration_Oct25_ceria_900mm_linkam_30C_att000_0006091.poni" # calibration PONI file. I used CeO2 
+    detector_type = "Pilatus" # "Pilatus" or "GE"
+    mask_file = "calibration/pilatus_mask.msk" # Either "path/to/your/mask.tif" or None
     
     #FEBRUARY 2025 BEAMTIME CALIBRATION PARAMETERS: (This calibration gives incorrect CeO2 rm. temp values! But is what Aaron used.)
-    poni_file = "calibration/Calibration_LaB6_100x100_3s_r8_mod2.poni" # calibration PONI file. Aaron used LaB6
-    detector_type = "GE" # "Pilatus" or "GE"
-    mask_file = None
+    # poni_file = "calibration/Calibration_LaB6_100x100_3s_r8_mod2.poni" # calibration PONI file. Aaron used LaB6
+    # detector_type = "GE" # "Pilatus" or "GE"
+    # mask_file = None
 
     #FEM Zero strain position of the current map. Use None if you are analyzing the zero strain position
     q0_reference_file = None #"ValidationOutputFiles/VB-APS-SSAO-6_25C_Map-AO_000304_ref/q0_vs_chi_FITTED.txt"  
     
     #The single image you are analyzing for strain data 
-    # tif_file      = "InputFiles/Oct2025_linkam_temperature_calib/ceria_900mm_linkam_30C_att000/ceria_900mm_linkam_30C_att000_0006092.tif" #OCTOBER CALIBRANT
-    tif_file      = "InputFiles/Feb2025_Calibrant_Patterns/Feb2025_ceria_71p767keV_1145mm_100x100_3s_000112.avg.tiff"  #FEBRUARY CERIA ONLY CALIBRANT
+    #OCTOBER CALIBRANT
+    tif_file      = "InputFiles/Oct2025_linkam_temperature_calib/ceria_900mm_linkam_30C_att000/ceria_900mm_linkam_30C_att000_0006092.tif"
+
+    #FEBRUARY CERIA ONLY CALIBRANT
+    # tif_file      = "InputFiles/Feb2025_Calibrant_Patterns/Feb2025_ceria_71p767keV_1145mm_100x100_3s_000112.avg.tiff"  
 
     
     #ORIGINAL SCRIPT PARAMETERS
@@ -97,28 +100,28 @@ def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tenso
     #             45.838482
     #         ]
 
-    initial_q_guesses = [ # February 2025 CeO2 Calibrant, Room Temp (This are WRONG ceria positions, but using them to run the script
-                            #to verify binned intensity issue is pervasive)
-                    19.973575,	
-                    23.063715,	
-                    32.620258,	
-                    38.253129,	
-                    39.954924,	
-                    50.284085,	
-                    51.591647,	
-                    56.521486,	
-            ]
-    
-    # initial_q_guesses = [ # October 2025 CeO2 Calibrant, Room Temp
-    #             20.108632,
-    #             23.220192,
-    #             32.840341,
-    #             38.507202,
-    #             40.219511,
-    #             50.611331,
-    #             51.926886,
-    #             56.885665
+    # initial_q_guesses = [ # February 2025 CeO2 Calibrant, Room Temp (This are WRONG ceria positions, but using them to run the script
+    #                         #to verify binned intensity issue is pervasive)
+    #                 19.973575,	
+    #                 23.063715,	
+    #                 32.620258,	
+    #                 38.253129,	
+    #                 39.954924,	
+    #                 50.284085,	
+    #                 51.591647,	
+    #                 56.521486,	
     #         ]
+    
+    initial_q_guesses = [ # October 2025 CeO2 Calibrant, Room Temp
+                20.108632,
+                23.220192,
+                32.840341,
+                38.507202,
+                40.219511,
+                50.611331,
+                51.926886,
+                56.885665
+            ]
   
     tol_array   = np.array([ # tolerance values for q when searching for a peak to fit [nm^-1] for calibrant
         [1, 1, 1, 1, 1, 1, 1, 1], # larger q

@@ -25,7 +25,7 @@ mask_file = "calibration/pilatus_mask.msk" # Either "path/to/your/mask.tif" or N
 
 #PLUG IN SINGLE IMAGE TO INGEGRATE AND FIND PEAKS
 #2026 Analysis uses include: Linkam temperature calibration (a few files, not looped), checking Feb/Oct peak position discrepancy
-tif_file = "InputFiles/Feb2025_Calibrant_Patterns/Feb2025_ceria_71p767keV_1145mm_100x100_3s_000112.avg.tiff" # representative data TIF file
+tif_file = "InputFiles/Oct2025_linkam_temperature_calib/ceria_900mm_linkam_30C_att000/ceria_900mm_linkam_30C_att000_0006092.tif" # representative data TIF file
 
 
 def main(
@@ -47,12 +47,14 @@ def main(
 
     # Load image data from .tif
     image = fabio.open(tif_file).data
-    # EXTREMELY IMPORTANT: Flip the image vertically for Pilatus detector: MATCHES Oct. 25 CALIBRATION
+    # EXTREMELY IMPORTANT: Flip the image AND MASK vertically for Pilatus detector: MATCHES Oct. 25 CALIBRATION
     image = np.flipud(image) if detector_type == "Pilatus" else image   
 
     # Load mask if provided
     if mask_file:
-        mask = fabio.open(mask_file).data ==1 #.astype(bool)
+        mask = fabio.open(mask_file).data == 1  # .astype(bool)
+        mask = np.flipud(mask) if detector_type == "Pilatus" else mask # EXTREMELY IMPORTANT: Flip the MASK vertically
+        fl.print_mask(mask, "calibration/pilatus_mask.tif") #Check to make sure mask is correct (e.g., the orientation)
     else:
         mask = None
 

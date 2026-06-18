@@ -42,6 +42,18 @@ def create_directory(path, logger=None):
         logger.warning(f"Error creating directory: {e}")
     return path
 
+def print_mask(mask, output_path):
+    """
+    Utility function to visualize a mask as an image.
+
+    Args:
+        mask (np.ndarray): A 2D boolean array where True values indicate masked pixels.
+        output_path (str): The directory path to save the mask visualization.
+    """
+    path = f"{output_path}"
+    mask = (mask * 255).astype(np.uint8)
+    imageio.imwrite(path, mask)
+
 # --- Utility: Fit pseudo-Voigt to peaks in a .int file ------------------
 # .int file is generated as from an ideal alumina (corundum) crystal structure
 # from materialsproject.org database (mp-1143) and Vesta to simulate the structure
@@ -285,7 +297,9 @@ def load_integrator_and_data(poni_path, tif_path, output_path, detector_type, ma
             mask_data = fabio.open(mask_file).data
             # Standard mask file convention: 1 = bad pixel, 0 = good pixel.
             # pyFAI mask convention: True = bad pixel, False = good pixel.
-            final_mask = (mask_data == 1) 
+            final_mask = (mask_data == 1)
+            # CRITICAL: Flip the mask vertically for Pilatus - MATCHES Oct. 25 CALIBRATION. Only flip in this block, i.e., if there is file provided
+            final_mask = np.flipud(final_mask) if detector_type == "Pilatus" else final_mask 
             logger.info(f"Successfully loaded external mask from: {mask_file}")
         except Exception as e:
             logger.warning(f"Failed to load mask file {mask_file}: {e}. No external mask applied.")
@@ -308,7 +322,7 @@ def load_integrator_and_data(poni_path, tif_path, output_path, detector_type, ma
 
     return ai, unaltered_image_data, final_mask #CRITICAL: return unaltered image data
 
-def load_and_prep_image(tif_path, output_path, mask_file=None, mask_threshold=4e2, logger=None, save_adjusted_tif=True, autocontrast_sensitivity = 3.0):
+def load_and_prep_image(tif_path, output_path, detector_type, mask_file=None, mask_threshold=4e2, logger=None, save_adjusted_tif=True, autocontrast_sensitivity = 3.0):
     """
     Loads and prepares a single TIFF image for integration.
 
@@ -318,6 +332,7 @@ def load_and_prep_image(tif_path, output_path, mask_file=None, mask_threshold=4e
     Args:
         tif_path (str): Path to the input TIFF image.
         output_path (str): Directory to save the adjusted image.
+        detector_type (str): Type of detector ("Pilatus" or "GE").
         mask_file (str, optional): Path to an external mask file (e.g., .tif, .npy). 
                                    In the mask file, 0 or False = GOOD (unmasked), 1 or True = BAD (masked).
         mask_threshold (float, optional): Unused. Defaults to 4e2.
@@ -332,6 +347,7 @@ def load_and_prep_image(tif_path, output_path, mask_file=None, mask_threshold=4e
 
     # Load and process the image data
     img = fabio.open(tif_path)
+    img = np.flipud(img) if detector_type == "Pilatus" else img # CRITICAL: Flip the image vertically for Pilatus - MATCHES Oct. 25 CALIBRATION
     unaltered_image_data = img.data.astype(np.float32) # Emphasize the image data must remain unaltered before binned integration. 
 
     # Contrast adjustment using ImageJ-style autocontrast (wider dynamic range). FOR VISUALIZATION ONLY. 
@@ -357,6 +373,8 @@ def load_and_prep_image(tif_path, output_path, mask_file=None, mask_threshold=4e
             # Standard mask file convention: 1 = bad, 0 = good.
             # pyFAI mask convention: True = bad, False = good.
             final_mask = (mask_data == 1) 
+            # CRITICAL: Flip the mask vertically for Pilatus - MATCHES Oct. 25 CALIBRATION. Only flip in this block, i.e., if there is file provided
+            final_mask = np.flipud(final_mask) if detector_type == "Pilatus" else final_mask 
             logger.info(f"Successfully loaded external mask from: {mask_file}")
         except Exception as e:
             logger.warning(f"Failed to load mask file {mask_file}: {e}. No external mask applied.")
