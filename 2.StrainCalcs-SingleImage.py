@@ -69,7 +69,7 @@ def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tenso
     autocontrast_sensitivity = 0.5 # Defines the upper and lower bounds of the autocontrast; smaller is a more narrow intensity band
     num_azim_bins = 120 # number of azimuthal bins around the data (so each bin is 360/num_azim_bins degrees wide)
     q_min_nm1     = 14.0 # q_0 for binning of the data
-    npt_rad       = 2048 # number of radial bins (~2-3x the radial pixel count)
+    npt_rad       = 1100 # number of radial bins. KEEP BELOW THE MAX. RADIAL PIXEL COUNT TO AVOID MASKING BUGS. 
     delta_tol     = 0.1 # default q-search width tolerance in nm^-1
     wavelength_nm = 0.1729786687 # [nm] X-ray wavelength
     solved_strain_components = 5 # This is the number of strain components to solve for in the system. # 3 = biaxial; 5 = biaxial w/ shear; 6 = all components
@@ -164,7 +164,7 @@ def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tenso
 
     # Bins and integrates the image data, then outputs the q vs χ (azimuth) data
     I2d, q, chi = fl.integrate_2d(
-        ai, data, mask,
+        ai, data, detector_type, mask, 
         num_azim_bins=num_azim_bins,
         q_min=q_min_nm1,
         npt_rad=npt_rad,

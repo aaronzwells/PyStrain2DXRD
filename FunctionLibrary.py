@@ -382,7 +382,7 @@ def load_and_prep_image(tif_path, output_path, detector_type, mask_file=None, ma
     # 2. Apply threshold mask (hot pixels)
     if mask_threshold is not None:
         # Mask pixels *above* the threshold
-        threshold_mask = data < mask_threshold
+        threshold_mask = unaltered_image_data < mask_threshold
         logger.info(f"Generated threshold mask for intensity > {mask_threshold}")
         
         if final_mask is not None:
@@ -397,7 +397,7 @@ def load_and_prep_image(tif_path, output_path, detector_type, mask_file=None, ma
 
     return unaltered_image_data, final_mask   #CRITICAL: return unaltered image data
 
-def integrate_2d(ai, data, mask, num_azim_bins=360, q_min=16.0, npt_rad=5000, output_dir=None, save_chi_files=False, logger=None):
+def integrate_2d(ai, data, detector_type, mask, num_azim_bins=360, q_min=16.0, npt_rad=5000, output_dir=None, save_chi_files=False, logger=None):
     """
     Integrates a 2D diffraction pattern into a 2D (q, chi) representation.
 
@@ -428,13 +428,22 @@ def integrate_2d(ai, data, mask, num_azim_bins=360, q_min=16.0, npt_rad=5000, ou
     q_full = ai.integrate2d(data, npt_rad, 1, unit="q_nm^-1").radial
     q_max = q_full[-1]
 
-    # Perform the high-resolution 2D integration
+    #Cannot get integrate2d to apply the mask as NaNs with Pilatus (it will only do zeros, I've tried so many things)
+    #This should force application to NaNs safely.
+    #Adding an "if detector_type == 'Pilatus'" to make safer, I think
+    if detector_type == 'Pilatus':
+        data_masked = np.where(mask, np.nan, data)
+
+    # Perform the high-resolution  2D integration
     res = ai.integrate2d(
-        data,
+        data_masked.astype(np.float32), # Ensure data is float for integration, especially important if there are NaNs from masking
         npt_rad=npt_rad,
         npt_azim=num_azim_bins,
         unit="q_nm^-1",
-        mask=mask,
+        #mask=mask,
+        #mask = np.ones_like(data, dtype=np.uint8), #Dummy mask to test if applying at all
+        #method="lut", #Tried this to see if it would get mask to apply
+        dummy = np.nan, #Ensures masked pixels are not contributing to the integrated intensity. Confirmed this is working as intended by testing with a dummy mask of all ones (i.e., all pixels masked) and confirming the output is all NaNs.
         radial_range=(q_min, q_max),
     )
     I2d = res.intensity

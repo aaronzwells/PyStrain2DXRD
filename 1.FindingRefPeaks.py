@@ -60,7 +60,7 @@ def main(
 
     # Perform azimuthal integration to get 1D pattern (q vs I)
     npt = 2000 # number of radial bins
-    result = ai.integrate1d(image, npt, mask=mask, unit="q_nm^-1")
+    result = ai.integrate1d(image, npt, mask=mask, dummy=np.nan, unit="q_nm^-1")
     q = result.radial
     I = result.intensity
 
