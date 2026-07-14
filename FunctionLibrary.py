@@ -397,7 +397,7 @@ def load_and_prep_image(tif_path, output_path, detector_type, mask_file=None, ma
 
     return unaltered_image_data, final_mask   #CRITICAL: return unaltered image data
 
-def integrate_2d(ai, data, detector_type, mask, num_azim_bins=360, q_min=16.0, npt_rad=5000, output_dir=None, save_chi_files=False, logger=None):
+def integrate_2d(ai, data, detector_type, mask, num_azim_bins=360, q_min=16.0, npt_rad=5000, output_dir=None, save_chi_files=False, save_txt_for_fityk=False, logger=None):
     """
     Integrates a 2D diffraction pattern into a 2D (q, chi) representation.
 
@@ -420,7 +420,10 @@ def integrate_2d(ai, data, detector_type, mask, num_azim_bins=360, q_min=16.0, n
                azimuthal chi-values in degrees.
     """
     if save_chi_files:
-        os.makedirs(output_dir, exist_ok=True)
+        os.makedirs(output_dir+"/ChiFiles", exist_ok=True)
+
+    if save_txt_for_fityk:
+        os.makedirs(output_dir+"/Fityk", exist_ok=True)
 
     logger = logger or logging.getLogger(__name__)
     logger.info("Running the integrate_2d() function")
@@ -463,15 +466,26 @@ def integrate_2d(ai, data, detector_type, mask, num_azim_bins=360, q_min=16.0, n
     if save_chi_files:
         for i, chi_val in enumerate(chi):
             chi_deg = chi_val
-            filename = os.path.join(output_dir, f"mid_azim_{chi_deg:.1f}deg.chi")
+            filename = os.path.join(output_dir+"/ChiFiles", f"mid_azim_{chi_deg:.1f}deg.chi")
             with open(filename, 'w') as f:
                 f.write(f"# Azimuthal bin: {chi_deg:.2f} deg\n")
                 f.write("# Columns: q (nm^-1), Intensity (a.u.)\n")
                 for q_val, I_val in zip(q, I2d[i]):
                     f.write(f"{q_val:.6f} {I_val:.6f}\n")
-        fig_filename = os.path.join(output_dir, "q_vs_chi_plot.png")
-        logger.info(f"Stacked q vs chi plot saved to: {fig_filename}")
 
+    # Save a clean .txt file in a separate folder for Fityk scripting, to compare to Aaron's fitting code
+    if save_txt_for_fityk:
+        for i, chi_val in enumerate(chi):
+            chi_deg = chi_val
+            filename = os.path.join(output_dir+"/Fityk", f"mid_azim_{chi_deg:.1f}deg.txt")
+            with open(filename, 'w') as f:
+                for q_val, I_val in zip(q, I2d[i]):
+                    f.write(f"{q_val:.6f} {I_val:.6f}\n")
+
+    # Moved these out of "if" block. Saving q vs chi plot for every pattern is a good idea.
+    fig_filename = os.path.join(output_dir, "q_vs_chi_plot.png")
+    logger.info(f"Stacked q vs chi plot saved to: {fig_filename}")
+    
     return I2d, q, chi
 
 def plot_binned_patterns_from_2d_integration(I2d, q, chi, output_dir=None, logger=None):
@@ -488,6 +502,8 @@ def plot_binned_patterns_from_2d_integration(I2d, q, chi, output_dir=None, logge
     import matplotlib.pyplot as plt
     logger = logger or logging.getLogger(__name__)
 
+    os.makedirs(output_dir+"/BinnedIntensityPlot", exist_ok=True)
+
     for i, chi_val in enumerate(chi):
         plt.figure(figsize=(5, 3))
         plt.plot(q, I2d[i], label=f"Chi = {chi_val:.1f} deg", linewidth = 1.0, color = 'k')
@@ -500,10 +516,10 @@ def plot_binned_patterns_from_2d_integration(I2d, q, chi, output_dir=None, logge
         ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(5))
         ax.set_xlim(10,90)
         if output_dir:
-            plt.savefig(os.path.join(output_dir, f"binned_pattern_chi_{chi_val:.1f}.png"), dpi=300, bbox_inches='tight')
+            plt.savefig(os.path.join(output_dir+"/BinnedIntensityPlot", f"binned_pattern_chi_{chi_val:.1f}.png"), dpi=300, bbox_inches='tight')
         plt.close()
 
-    logger.info(f"Plotted binned patterns for {len(chi)} bins. Plots saved to: {output_dir}")
+    logger.info(f"Plotted binned patterns for {len(chi)} bins. Plots saved to: {output_dir+"/BinnedIntensityPlot"}")
 
 def fit_peaks_with_initial_guesses(I2d, chi, q, q_peaks, delta_tol=0.07, eta0=0.5, n_jobs=-1, delta_array=None, output_dir=None, logger=None):
     """

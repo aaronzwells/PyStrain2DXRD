@@ -64,6 +64,7 @@ def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tenso
     
     #ORIGINAL SCRIPT PARAMETERS
     save_chi_files = True # this determines whether every q vs chi bin dataset is saved as a separate file or if the file writing is skipped
+    save_txt_for_fityk = True # Option to save a clean .txt file in a separate folder for Fityk scripting, to compare to Aaron's fitting code
     save_adjusted_tif = True
     mask_thresh   = None # Minimum threshold value for the image mask
     autocontrast_sensitivity = 0.5 # Defines the upper and lower bounds of the autocontrast; smaller is a more narrow intensity band
@@ -76,6 +77,7 @@ def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tenso
     MAD_threshold = 2 # Threshold for median absolute deviation (MAD) filtering
 
     #Examine bins: Now a bare bones option to just look at the plotted binned data to make sure "2d" integration looks reasonable
+    # If you want to visualize the binned data, set this to True. Should not typically be needed now that the intensity issue is corrected. 
     examine_bins = True 
 
     # initial_q_guesses = [ # February 2025 Al2O3 with Aaron calibration (positions may not be accurate)
@@ -100,7 +102,7 @@ def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tenso
     #             45.838482
     #         ]
 
-    # initial_q_guesses = [ # February 2025 CeO2 Calibrant, Room Temp (This are WRONG ceria positions, but using them to run the script
+    # initial_q_guesses = [ # February 2025 CeO2 Calibrant, Room Temp (These are WRONG ceria positions, but using them to run the script
     #                         #to verify binned intensity issue is pervasive)
     #                 19.973575,	
     #                 23.063715,	
@@ -159,8 +161,8 @@ def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tenso
         save_adjusted_tif=save_adjusted_tif,
         autocontrast_sensitivity=autocontrast_sensitivity)
 
-    # Creates output directory for the χ data if there isn't one already
-    chi_path = fl.create_directory(f"{output_path}/ChiOutput", logger=file_logger)
+    # Creates output directory for the binned data if there isn't one already
+    binned_path = fl.create_directory(f"{output_path}/BinnedOutput", logger=file_logger)
 
     # Bins and integrates the image data, then outputs the q vs χ (azimuth) data
     I2d, q, chi = fl.integrate_2d(
@@ -168,15 +170,16 @@ def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tenso
         num_azim_bins=num_azim_bins,
         q_min=q_min_nm1,
         npt_rad=npt_rad,
-        output_dir=chi_path,
+        output_dir=binned_path,
         save_chi_files=save_chi_files,
+        save_txt_for_fityk=save_txt_for_fityk,
         logger=file_logger
     )
 
     #Performs an analysis similar to script 1 on each bin, if examine_bins is true
     if examine_bins:
-        fl.plot_binned_patterns_from_2d_integration(I2d, q, chi, output_dir=chi_path, logger=file_logger)
-        #Put the plots in the same ChiOutput folder
+        fl.plot_binned_patterns_from_2d_integration(I2d, q, chi, output_dir=binned_path, logger=file_logger)
+        #The function puts the plots in a subdirectory in the same BinnedOutput folder
 
     # Fits the q vs χ data to the Pseudo-Voigt function to find the peak centroids for each bin and ring
     q_vs_chi, q_vs_chi_errors, q_chi_path = fl.fit_peaks_with_initial_guesses(
