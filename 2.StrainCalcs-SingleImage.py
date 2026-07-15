@@ -46,8 +46,9 @@ def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tenso
     # detector_type = "Pilatus" # "Pilatus" or "GE"
     # mask_file = "calibration/pilatus_mask.msk" # Either "path/to/your/mask.tif" or None
     
-    #FEBRUARY 2025 BEAMTIME CALIBRATION PARAMETERS: (This calibration gives incorrect CeO2 rm. temp values! But is what Aaron used.)
-    poni_file = "calibration/Calibration_Feb25_ceria_1145mm_25C_att000_000112.poni" # calibration PONI file. Aaron used LaB6
+    #FEBRUARY 2025 BEAMTIME CALIBRATION PARAMETERS: 
+    #This calibration gives ~0.03%-0.04% error from known ceria d-spacings. calibration/Calibration_LaB6_100x100_3s_r8_mod2_BAD.poni was 0.67-0.69% 
+    poni_file = "calibration/Calibration_Feb25_ceria_1145mm_25C_att000_000112.poni" # calibration PONI file. Ben used CeO2
     detector_type = "GE" # "Pilatus" or "GE"
     mask_file = None 
     
