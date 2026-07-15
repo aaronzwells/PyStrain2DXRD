@@ -434,8 +434,10 @@ def integrate_2d(ai, data, detector_type, mask, num_azim_bins=360, q_min=16.0, n
     #Cannot get integrate2d to apply the mask as NaNs with Pilatus (it will only do zeros, I've tried so many things)
     #This should force application to NaNs safely.
     #Adding an "if detector_type == 'Pilatus'" to make safer, I think
-    if detector_type == 'Pilatus':
+    if mask is not None:
         data_masked = np.where(mask, np.nan, data)
+    else:
+        data_masked = data
 
     # Perform the high-resolution  2D integration
     res = ai.integrate2d(

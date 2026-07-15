@@ -42,24 +42,25 @@ def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tenso
     start_time = time.time()
     
     #OCTOBER 2025 BEAMTIME CALIBRATION PARAMETERS: 
-    poni_file = "calibration/Calibration_Oct25_ceria_900mm_linkam_30C_att000_0006091.poni" # calibration PONI file. I used CeO2 
-    detector_type = "Pilatus" # "Pilatus" or "GE"
-    mask_file = "calibration/pilatus_mask.msk" # Either "path/to/your/mask.tif" or None
+    # poni_file = "calibration/Calibration_Oct25_ceria_900mm_linkam_30C_att000_0006091.poni" # calibration PONI file. I used CeO2 
+    # detector_type = "Pilatus" # "Pilatus" or "GE"
+    # mask_file = "calibration/pilatus_mask.msk" # Either "path/to/your/mask.tif" or None
     
     #FEBRUARY 2025 BEAMTIME CALIBRATION PARAMETERS: (This calibration gives incorrect CeO2 rm. temp values! But is what Aaron used.)
-    # poni_file = "calibration/Calibration_LaB6_100x100_3s_r8_mod2.poni" # calibration PONI file. Aaron used LaB6
-    # detector_type = "GE" # "Pilatus" or "GE"
-    # mask_file = None
-
-    #FEM Zero strain position of the current map. Use None if you are analyzing the zero strain position
-    q0_reference_file = None #"ValidationOutputFiles/VB-APS-SSAO-6_25C_Map-AO_000304_ref/q0_vs_chi_FITTED.txt"  
+    poni_file = "calibration/Calibration_Feb25_ceria_1145mm_25C_att000_000112.poni" # calibration PONI file. Aaron used LaB6
+    detector_type = "GE" # "Pilatus" or "GE"
+    mask_file = None 
     
     #The single image you are analyzing for strain data 
     #OCTOBER CALIBRANT
-    tif_file      = "InputFiles/Oct2025_linkam_temperature_calib/ceria_900mm_linkam_30C_att000/ceria_900mm_linkam_30C_att000_0006092.tif"
+    # tif_file      = "InputFiles/Oct2025_linkam_temperature_calib/ceria_900mm_linkam_30C_att000/ceria_900mm_linkam_30C_att000_0006092.tif"
 
     #FEBRUARY CERIA ONLY CALIBRANT
-    # tif_file      = "InputFiles/Feb2025_Calibrant_Patterns/Feb2025_ceria_71p767keV_1145mm_100x100_3s_000112.avg.tiff"  
+    tif_file      = "InputFiles/Feb2025_Calibrant_Patterns/Feb2025_ceria_71p676keV_1145mm_100x100_3s_000112.avg.tiff"  
+
+
+    #FEM Zero strain position of the current map. Use None if you are analyzing the zero strain position
+    q0_reference_file = None #"ValidationOutputFiles/VB-APS-SSAO-6_25C_Map-AO_000304_ref/q0_vs_chi_FITTED.txt" 
 
     
     #ORIGINAL SCRIPT PARAMETERS
@@ -114,7 +115,7 @@ def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tenso
     #                 56.521486,	
     #         ]
     
-    initial_q_guesses = [ # October 2025 CeO2 Calibrant, Room Temp
+    initial_q_guesses = [ # October 2025 CeO2 Calibrant, Room Temp. Using the same initial guesses for Feb. 2025 (Frame 112) after corrected cal. 
                 20.108632,
                 23.220192,
                 32.840341,

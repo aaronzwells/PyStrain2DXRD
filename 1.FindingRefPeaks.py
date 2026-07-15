@@ -14,18 +14,23 @@ import os
 #Samples 5, 3, 2: October Dataset
 
 #OCTOBER 2025 BEAMTIME CALIBRATION PARAMETERS: 
-poni_file = "calibration/Calibration_Oct25_ceria_900mm_linkam_30C_att000_0006091.poni" # calibration PONI file. I used CeO2 
-detector_type = "Pilatus" # "Pilatus" or "GE"
-mask_file = "calibration/pilatus_mask.msk" # Either "path/to/your/mask.tif" or None
+# poni_file = "calibration/Calibration_Oct25_ceria_900mm_linkam_30C_att000_0006091.poni" # calibration PONI file. I used CeO2 
+# detector_type = "Pilatus" # "Pilatus" or "GE"
+# mask_file = "calibration/pilatus_mask.msk" # Either "path/to/your/mask.tif" or None
 
-#FEBRUARY 2025 BEAMTIME CALIBRATION PARAMETERS: (This calibration gives incorrect CeO2 rm. temp values! But is what Aaron used.)
+#FEBRUARY 2025 BEAMTIME CALIBRATION PARAMETERS (AARON): (This calibration gives incorrect CeO2 rm. temp values! But is what Aaron used.)
 # poni_file = "calibration/Calibration_LaB6_100x100_3s_r8_mod2.poni" # calibration PONI file. Aaron used LaB6
 # detector_type = "GE" # "Pilatus" or "GE"
 # mask_file = None
 
+#FEBRUARY 2025 BEAMTIME CALIBRATION PARAMETERS (BEN): 
+poni_file = "calibration/Calibration_Feb25_ceria_1145mm_25C_att000_000112.poni" # calibration PONI file. Ben used CeO2
+detector_type = "GE" # "Pilatus" or "GE"
+mask_file = None
+
 #PLUG IN SINGLE IMAGE TO INGEGRATE AND FIND PEAKS
 #2026 Analysis uses include: Linkam temperature calibration (a few files, not looped), checking Feb/Oct peak position discrepancy
-tif_file = "InputFiles/Oct2025_linkam_temperature_calib/ceria_900mm_linkam_30C_att000/ceria_900mm_linkam_30C_att000_0006092.tif" # representative data TIF file
+tif_file = "InputFiles/Feb2025_Calibrant_Patterns/Feb2025_ceria_71p676keV_1145mm_100x100_3s_000112.avg.tiff" # representative data TIF file
 
 
 def main(
