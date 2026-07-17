@@ -48,25 +48,31 @@ def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tenso
     
     #FEBRUARY 2025 BEAMTIME CALIBRATION PARAMETERS: 
     #This calibration gives ~0.03%-0.04% error from known ceria d-spacings. calibration/Calibration_LaB6_100x100_3s_r8_mod2_BAD.poni was 0.67-0.69% 
-    poni_file = "calibration/Calibration_Feb25_ceria_1145mm_25C_att000_000112.poni" # calibration PONI file. Ben used CeO2
+    poni_file = "calibration/Calibration_Feb25_ceria_1145mm_25C_att000_000112.poni" # calibration PONI file. Ben used CeO2. Do not use old one. 
     detector_type = "GE" # "Pilatus" or "GE"
     mask_file = None 
     
-    #The single image you are analyzing for strain data 
+    #-------------------------The single image you are analyzing for strain data-------------------------------------
     #OCTOBER CALIBRANT
     # tif_file      = "InputFiles/Oct2025_linkam_temperature_calib/ceria_900mm_linkam_30C_att000/ceria_900mm_linkam_30C_att000_0006092.tif"
 
     #FEBRUARY CERIA ONLY CALIBRANT
-    tif_file      = "InputFiles/Feb2025_Calibrant_Patterns/Feb2025_ceria_71p676keV_1145mm_100x100_3s_000112.avg.tiff"  
+    # tif_file      = "InputFiles/Feb2025_Calibrant_Patterns/Feb2025_ceria_71p676keV_1145mm_100x100_3s_000112.avg.tiff"  
 
+   #FEBRUARY Before Thermal Cycle, Zero Strain Position (#304)
+    # tif_file      = "InputFiles/Feb2025_Zero_Strain_Locations/VB-APS-SSAO-6_25C_Map-AO_000304.avg.tiff"
+
+    #FEBRUARY Before Thermal Cycle, Arbitrary Location (#492)
+    tif_file      = "InputFiles/Feb2025_25C_AO_Before/VB-APS-SSAO-6_25C_TestMap-AO_000492.avg.tiff"
+
+    #---------------------------------------------------------------------------------------------------------------------
 
     #FEM Zero strain position of the current map. Use None if you are analyzing the zero strain position
-    q0_reference_file = None #"ValidationOutputFiles/VB-APS-SSAO-6_25C_Map-AO_000304_ref/q0_vs_chi_FITTED.txt" 
+    q0_reference_file = None #"ValidationOutputFiles/VB-APS-SSAO-6_25C_Map-AO_000304/q0_vs_chi_FITTED.txt" 
 
     
     #ORIGINAL SCRIPT PARAMETERS
-    save_chi_files = True # this determines whether every q vs chi bin dataset is saved as a separate file or if the file writing is skipped
-    save_txt_for_fityk = True # Option to save a clean .txt file in a separate folder for Fityk scripting, to compare to Aaron's fitting code
+    
     save_adjusted_tif = True
     mask_thresh   = None # Minimum threshold value for the image mask
     autocontrast_sensitivity = 0.5 # Defines the upper and lower bounds of the autocontrast; smaller is a more narrow intensity band
@@ -78,54 +84,33 @@ def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tenso
     solved_strain_components = 5 # This is the number of strain components to solve for in the system. # 3 = biaxial; 5 = biaxial w/ shear; 6 = all components
     MAD_threshold = 2 # Threshold for median absolute deviation (MAD) filtering
 
-    #Examine bins: Now a bare bones option to just look at the plotted binned data to make sure "2d" integration looks reasonable
-    # If you want to visualize the binned data, set this to True. Should not typically be needed now that the intensity issue is corrected. 
-    examine_bins = True 
+    #BinnedOutput options. Used for debugging intensity issue. Set all to true to investigate if any issues are suspected with binned data after "2D" integrator
+    save_chi_files = False # this determines whether every q vs chi bin dataset is saved as a separate file or if the file writing is skipped
+    save_txt_for_fityk = True # Option to save a clean .txt file in a separate folder for Fityk scripting, to compare to Aaron's fitting code
+    examine_bins = True # If you want to visualize the binned data, set this to True. Should not typically be needed now that the intensity issue is corrected. 
 
-    # initial_q_guesses = [ # February 2025 Al2O3 with Aaron calibration (positions may not be accurate)
-    #             17.961188,
-    #             24.500613,
-    #             26.267830,
-    #             29.974002,
-    #             35.926353,
-    #             39.034769,
-    #             44.513621,
-    #             45.514461
+    # initial_q_guesses = [ # CeO2 CALIBRANT VALID INITIAL GUESSES (Correct peak pos.)
+    #             20.108632,
+    #             23.220192,
+    #             32.840341,
+    #             38.507202,
+    #             40.219511,
+    #             50.611331,
+    #             51.926886,
+    #             56.885665
     #         ]
 
-    # initial_q_guesses = [ # October 2025 Al2O3 (These peak positions should ultimately be correct, based on calibrant matching)
-    #             18.103087,
-    #             24.677268,
-    #             26.458500,
-    #             30.203330,
-    #             36.188437,
-    #             39.321810,
-    #             44.830282,
-    #             45.838482
-    #         ]
-
-    # initial_q_guesses = [ # February 2025 CeO2 Calibrant, Room Temp (These are WRONG ceria positions, but using them to run the script
-    #                         #to verify binned intensity issue is pervasive)
-    #                 19.973575,	
-    #                 23.063715,	
-    #                 32.620258,	
-    #                 38.253129,	
-    #                 39.954924,	
-    #                 50.284085,	
-    #                 51.591647,	
-    #                 56.521486,	
-    #         ]
-    
-    initial_q_guesses = [ # October 2025 CeO2 Calibrant, Room Temp. Using the same initial guesses for Feb. 2025 (Frame 112) after corrected cal. 
-                20.108632,
-                23.220192,
-                32.840341,
-                38.507202,
-                40.219511,
-                50.611331,
-                51.926886,
-                56.885665
+    initial_q_guesses = [ # AL2O3 EXPERIMENT VALID INITIAL GUESSES (Correct peak pos.)
+                18.103087,
+                24.677268,
+                26.458500,
+                30.203330,
+                36.188437,
+                39.321810,
+                44.830282,
+                45.838482
             ]
+
   
     tol_array   = np.array([ # tolerance values for q when searching for a peak to fit [nm^-1] for calibrant
         [1, 1, 1, 1, 1, 1, 1, 1], # larger q
@@ -196,7 +181,7 @@ def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tenso
         logger=file_logger)
     
     fl.plot_q_vs_chi_stacked(
-        file_path=q_chi_path,
+        q_vs_chi,
         output_dir=output_path,
         dpi=600,
         plot=True,

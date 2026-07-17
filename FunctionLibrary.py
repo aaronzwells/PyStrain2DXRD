@@ -611,26 +611,37 @@ def fit_peaks_with_initial_guesses(I2d, chi, q, q_peaks, delta_tol=0.07, eta0=0.
     
     q_centroids_list, q_errors_list = zip(*results)
 
-    q_centroids_arr = np.array(q_centroids_list).T
+    #BS 7/17/26: Reformatted the q_vs_chi_peaks.txt and q_vs_chi_errors.txt outputs for better readability
+    chi = (chi + 360) % 360 #confirmed this is starting from east
+    q_centroids_arr = np.array(q_centroids_list).T #Keep the transpose for returned arrays b/c of Aaron's subsequent formatting
     q_errors_arr = np.array(q_errors_list).T
+
+    bin_labeled_centroids = np.column_stack((chi, q_centroids_arr.T)) #Un-transpose for data readability
+    bin_labeled_errors = np.column_stack((chi, q_errors_arr.T))
+    num_peaks = q_centroids_arr.shape[0]
+    peak_headers = "\t".join([f"Peak_{i+1}" for i in range(num_peaks)])
+
+    header_peaks = f"Chi_Azimuth_(deg)\t{peak_headers}"
+    header_errors = f"Chi_Azimuth_(deg)\t{peak_headers}"
 
     # Save the results to text files if an output directory is provided
     if output_dir is not None:
         q_chi_path = os.path.join(output_dir, "q_vs_chi_peaks.txt")
         q_err_path = os.path.join(output_dir, "q_vs_chi_errors.txt")
         
-        np.savetxt(q_chi_path, q_centroids_arr, fmt="%.6f", delimiter="\t", header="Rows = rings; Cols = azim bins (q centroids)")
-        np.savetxt(q_err_path, q_errors_arr, fmt="%.6f", delimiter="\t", header="Rows = rings; Cols = azim bins (q errors)")
+        np.savetxt(q_chi_path, bin_labeled_centroids, fmt="%.6f", delimiter="\t", header=header_peaks)
+        np.savetxt(q_err_path, bin_labeled_errors, fmt="%.6f", delimiter="\t", header=header_errors)
         
         logger.info(f"q vs chi centroid data saved to: {q_chi_path}")
         logger.info(f"q vs chi error data saved to: {q_err_path}")
     else:
         logger.warning("No output directory provided! q vs chi data was not saved!")
 
-    return q_centroids_arr, q_errors_arr, q_chi_path
+    return q_centroids_arr, q_errors_arr, q_chi_path  #Keeping the output arrays in the transposed format for downstream processing
 
 
-def plot_q_vs_chi_stacked(file_path, output_dir=None, chi_deg=None, dpi=600, plot=True, calibrant=False, logger=None):
+
+def plot_q_vs_chi_stacked(q_centroids_arr, output_dir=None, chi_deg=None, dpi=600, plot=True, calibrant=False, logger=None):
     """
     Plots each row of q_vs_chi_peaks.txt as a stacked subplot, with chi on the x-axis and q on the y-axis.
     This is useful for visualizing the q(χ) variation for each diffraction ring.
@@ -646,7 +657,7 @@ def plot_q_vs_chi_stacked(file_path, output_dir=None, chi_deg=None, dpi=600, plo
     import numpy as np
     logger = logger or logging.getLogger(__name__)
 
-    q_data = np.loadtxt(file_path, comments='#', delimiter='\t')
+    q_data = q_centroids_arr # BS 7/17/26: Using q_centroids_arr directly, no need to read the text file
     num_rings, num_chi = q_data.shape
 
     if chi_deg is None:
@@ -663,7 +674,8 @@ def plot_q_vs_chi_stacked(file_path, output_dir=None, chi_deg=None, dpi=600, plo
             ax.plot(chi_deg[mask], q_vals[mask], '.', markersize=3)
             # ax.set_title(f'Ring {i+1}')
             ax.set_ylabel(f'q (nm⁻¹)')
-            ax.set_ylim(np.mean(q_vals[mask])-0.05, np.mean(q_vals[mask])+0.05)
+            #BS 7/17/26: Ignoring y limit so we can see ALL the fits for now
+            #ax.set_ylim(np.mean(q_vals[mask])-0.05, np.mean(q_vals[mask])+0.05)
             ax.set_xlim(0, 360)
             
         axes[-1].set_xlabel('Azimuth χ (°)')
