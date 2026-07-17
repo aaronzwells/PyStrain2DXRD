@@ -43,7 +43,7 @@ def main(
     filename = fl.remove_filename_extension(tif_file)
     
     # Creates an output directory of the same name as the mapping image to store all the data for that map image location
-    outputPath = os.path.join("PeakFinding", filename)
+    outputPath = os.path.join("1_UnbinnedIntegration_PeakFinding", filename)
     output_path = fl.create_directory(outputPath)
     print(f"[INFO] Output Path is {output_path}")
 
