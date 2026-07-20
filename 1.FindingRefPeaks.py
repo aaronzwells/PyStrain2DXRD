@@ -14,17 +14,17 @@ import os
 #Samples 5, 3, 2: October Dataset
 
 #OCTOBER 2025 BEAMTIME CALIBRATION PARAMETERS: 
-# poni_file = "calibration/Calibration_Oct25_ceria_900mm_linkam_30C_att000_0006091.poni" # calibration PONI file. I used CeO2 
+# poni_file = "0_calibration/Calibration_Oct25_ceria_900mm_linkam_30C_att000_0006091.poni" # calibration PONI file. I used CeO2 
 # detector_type = "Pilatus" # "Pilatus" or "GE"
-# mask_file = "calibration/pilatus_mask.msk" # Either "path/to/your/mask.tif" or None
+# mask_file = "0_calibration/pilatus_mask.msk" # Either "path/to/your/mask.tif" or None
 
 #FEBRUARY 2025 BEAMTIME CALIBRATION PARAMETERS (AARON): (This calibration gives incorrect CeO2 rm. temp values! But is what Aaron used.)
-# poni_file = "calibration/Calibration_LaB6_100x100_3s_r8_mod2.poni" # calibration PONI file. Aaron used LaB6
+# poni_file = "0_calibration/Calibration_LaB6_100x100_3s_r8_mod2.poni" # calibration PONI file. Aaron used LaB6
 # detector_type = "GE" # "Pilatus" or "GE"
 # mask_file = None
 
 #FEBRUARY 2025 BEAMTIME CALIBRATION PARAMETERS (BEN): 
-poni_file = "calibration/Calibration_Feb25_ceria_1145mm_25C_att000_000112.poni" # calibration PONI file. Ben used CeO2
+poni_file = "0_calibration/Calibration_Feb25_ceria_1145mm_25C_att000_000112.poni" # calibration PONI file. Ben used CeO2
 detector_type = "GE" # "Pilatus" or "GE"
 mask_file = None
 
@@ -59,7 +59,7 @@ def main(
     if mask_file:
         mask = fabio.open(mask_file).data == 1  # .astype(bool)
         mask = np.flipud(mask) if detector_type == "Pilatus" else mask # EXTREMELY IMPORTANT: Flip the MASK vertically
-        fl.print_mask(mask, "calibration/pilatus_mask.tif") #Check to make sure mask is correct (e.g., the orientation)
+        fl.print_mask(mask, "0_calibration/pilatus_mask.tif") #Check to make sure mask is correct (e.g., the orientation)
     else:
         mask = None
 

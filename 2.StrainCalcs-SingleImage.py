@@ -42,13 +42,13 @@ def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tenso
     start_time = time.time()
     
     #OCTOBER 2025 BEAMTIME CALIBRATION PARAMETERS: 
-    # poni_file = "calibration/Calibration_Oct25_ceria_900mm_linkam_30C_att000_0006091.poni" # calibration PONI file. I used CeO2 
+    # poni_file = "0_calibration/Calibration_Oct25_ceria_900mm_linkam_30C_att000_0006091.poni" # calibration PONI file. I used CeO2 
     # detector_type = "Pilatus" # "Pilatus" or "GE"
-    # mask_file = "calibration/pilatus_mask.msk" # Either "path/to/your/mask.tif" or None
+    # mask_file = "0_calibration/pilatus_mask.msk" # Either "path/to/your/mask.tif" or None
     
     #FEBRUARY 2025 BEAMTIME CALIBRATION PARAMETERS: 
-    #This calibration gives ~0.03%-0.04% error from known ceria d-spacings. calibration/Calibration_LaB6_100x100_3s_r8_mod2_BAD.poni was 0.67-0.69% 
-    poni_file = "calibration/Calibration_Feb25_ceria_1145mm_25C_att000_000112.poni" # calibration PONI file. Ben used CeO2. Do not use old one. 
+    #This calibration gives ~0.03%-0.04% error from known ceria d-spacings. 0_calibration/Calibration_LaB6_100x100_3s_r8_mod2_BAD.poni was 0.67-0.69% 
+    poni_file = "0_calibration/Calibration_Feb25_ceria_1145mm_25C_att000_000112.poni" # calibration PONI file. Ben used CeO2. Do not use old one. 
     detector_type = "GE" # "Pilatus" or "GE"
     mask_file = None 
     
@@ -68,7 +68,7 @@ def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tenso
     #---------------------------------------------------------------------------------------------------------------------
 
     #FEM Zero strain position of the current map. Use None if you are analyzing the zero strain position
-    q0_reference_file = None #"ValidationOutputFiles/VB-APS-SSAO-6_25C_Map-AO_000304/q0_vs_chi_FITTED.txt" 
+    q0_reference_file = None #"2_BinnedIntegrationAndFitting/VB-APS-SSAO-6_25C_Map-AO_000304/q0_vs_chi_FITTED.txt" 
 
     
     #ORIGINAL SCRIPT PARAMETERS
@@ -121,7 +121,7 @@ def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tenso
     filename = fl.remove_filename_extension(tif_file)
     
     # Creates an output directory of the same name as the mapping image to store all the data for that map image location
-    outputPath = os.path.join("ValidationOutputFiles", filename)
+    outputPath = os.path.join("2_BinnedIntegrationAndFitting", filename)
     output_path = fl.create_directory(outputPath, logger=None)
     print(f"[INFO] Output Path is {output_path}")
 

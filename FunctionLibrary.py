@@ -639,6 +639,82 @@ def fit_peaks_with_initial_guesses(I2d, chi, q, q_peaks, delta_tol=0.07, eta0=0.
 
     return q_centroids_arr, q_errors_arr, q_chi_path  #Keeping the output arrays in the transposed format for downstream processing
 
+#BS 7/17/26: Adding functions to fit peaks with Fityk
+
+def write_fityk_script(script_name, fityk_input_pfx, chi, center_guesses, tol_up, tol_down, bkg_spline = None, min_q=14, max_q=92):
+    """
+    Generates a Fityk script for fitting peaks.
+    Single peak fityk command example:
+        # Load a blank session: 
+            reset
+        # Load the file:
+            @+ <'/Users/benjaminschneiderman/Library/CloudStorage/OneDrive-ColoradoSchoolofMines/Code/Python/Analysis_pyFAI-1/ValidationOutputFiles/VB-APS-SSAO-6_25C_TestMap-AO_000492/BinnedOutput/Fityk/mid_azim_19.5deg.txt'
+        # Trim the background: 
+            %bg0 = Spline(15.98,36.81, 19.66,20.96, 23.68,15.15, 28.26,11.62, 43.09,9.33, 48.74,9.16, 54.32,5.46, 57.1,2.47, 61.2,0.88)
+            Y = y - %bg0(x)
+        # Set the a range for fitting
+            A = a and not (18.5 < x and x < 92) #Restrict range to single peak
+            A = a and not (14 < x and x < 17.5)
+        # Fit exactly one peak to the range (the new locking logic prevents double fits)
+            guess PseudoVoigt
+            fit
+        # LOCK the peak parameters so they can never change again
+        # Numbering starts from the number of spline parameters in your background plus one
+        # Four parameters per peak are, in order, intensity, center, hwhm, PV shape param.  
+            $_19 = {$_19} 
+            $_20 = {$_20}
+            $_21 = {$_21}
+            $_22 = {$_22}
+        # Reactivate datapoints before setting the range for the next peak
+            A = a or (12.7 < x and x < 87.17)
+        # @0: info peaks > ‘/Users/benjaminschneiderman/Library/CloudStorage/OneDrive-ColoradoSchoolofMines/Code/Python/Analysis_pyFAI-1/ValidationOutputFiles/ceria_900mm_linkam_30C_att000_0006092/BinnedOutput/Fityk/mid_azim_43.5deg.peaks’
+    
+    Args:
+        fityk_input_pfx (str): Prefix path for the Fityk input files.
+        chi (list): List of azimuthal angles (in degrees).
+        center_guesses (list): List of initial center guesses for the peaks.
+        tol_up (float): Upper tolerance for the fitting (peak-specific list).
+        tol_down (float): Lower tolerance for the fitting (peak-specific list).
+        bkg_spline (list): Background spline parameters, formatted as (x0, y0, x1, y1, ...).
+        min_q (float): Minimum global q-value for the fitting range.
+        max_q (float): Maximum global q-value for the fitting range.
+
+    """
+    #logger = logger or logging.getLogger(__name__)
+
+    fityk_script = ""  #Initialize blank string
+    for i in range(1): # len(chi)):
+        fityk_script += f"""
+        reset
+        @+ <'{fityk_input_pfx}{chi[i]}deg.txt'"""
+        if bkg_spline is not None:
+            fityk_script += f"""
+            %bg0 = Spline({','.join(map(str, bkg_spline))})
+            Y = y - %bg0(x)"""
+
+        for peak in range(len(center_guesses)):
+            # 'and not' statement restricts x range to a single peak
+            # fit exactly one PV peak to each x range
+            # 'or' statements re-activate all the points so you can move to the next peak AFTER LOCKING
+            fityk_script += f"""
+            A = a and not ({min_q} < x and x < {center_guesses[peak] - tol_down[peak]})
+            A = a and not ({center_guesses[peak] + tol_up[peak]} < x and x < {max_q})
+            guess PseudoVoigt
+            fit
+            $_{len(bkg_spline)+4*peak+1} = {{$_{len(bkg_spline)+4*peak+1}}}
+            $_{len(bkg_spline)+4*peak+2} = {{$_{len(bkg_spline)+4*peak+2}}}
+            $_{len(bkg_spline)+4*peak+3} = {{$_{len(bkg_spline)+4*peak+3}}}
+            $_{len(bkg_spline)+4*peak+4} = {{$_{len(bkg_spline)+4*peak+4}}}
+            A = a or ({min_q} < x and x < {center_guesses[peak] - tol_down[peak]})
+            A = a or ({center_guesses[peak] + tol_up[peak]} < x and x < {max_q})"""
+         
+    with open(script_name, "w") as f:
+        f.write(fityk_script)
+    #logger.info(f"Fityk script written to: {script_name}")
+
+def fit_peaks_with_fityk():
+    
+    pass
 
 
 def plot_q_vs_chi_stacked(q_centroids_arr, output_dir=None, chi_deg=None, dpi=600, plot=True, calibrant=False, logger=None):
