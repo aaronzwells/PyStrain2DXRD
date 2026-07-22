@@ -621,15 +621,15 @@ def fit_peaks_with_initial_guesses(I2d, chi, q, q_peaks, delta_tol=0.07, eta0=0.
     num_peaks = q_centroids_arr.shape[0]
     peak_headers = "\t".join([f"Peak_{i+1}" for i in range(num_peaks)])
 
-    header_peaks = f"Chi_Azimuth_(deg)\t{peak_headers}"
+    headers_with_bin_label = f"Chi_Azimuth_(deg)\t{peak_headers}"
     header_errors = f"Chi_Azimuth_(deg)\t{peak_headers}"
 
     # Save the results to text files if an output directory is provided
     if output_dir is not None:
         q_chi_path = os.path.join(output_dir, "q_vs_chi_peaks.txt")
         q_err_path = os.path.join(output_dir, "q_vs_chi_errors.txt")
-        
-        np.savetxt(q_chi_path, bin_labeled_centroids, fmt="%.6f", delimiter="\t", header=header_peaks)
+
+        np.savetxt(q_chi_path, bin_labeled_centroids, fmt="%.6f", delimiter="\t", header=headers_with_bin_label)
         np.savetxt(q_err_path, bin_labeled_errors, fmt="%.6f", delimiter="\t", header=header_errors)
         
         logger.info(f"q vs chi centroid data saved to: {q_chi_path}")
@@ -641,7 +641,7 @@ def fit_peaks_with_initial_guesses(I2d, chi, q, q_peaks, delta_tol=0.07, eta0=0.
 
 #BS 7/17/26: Adding functions to fit peaks with Fityk
 
-def write_fityk_script(script_name, fityk_input_pfx, chi, center_guesses, tol_up, tol_down, bkg_spline = None, min_q=14, max_q=92):
+def write_fityk_script(script_name, fityk_input_pfx, chi, center_guesses, tol_up, tol_down, bkg_spline = None, min_q=14, max_q=92, logger = None):
     """
     Generates a Fityk script for fitting peaks.
     Single peak fityk command example:
@@ -671,7 +671,7 @@ def write_fityk_script(script_name, fityk_input_pfx, chi, center_guesses, tol_up
     
     Args:
         fityk_input_pfx (str): Prefix path for the Fityk input files.
-        chi (list): List of azimuthal angles (in degrees).
+        chi (list): List of azimuthal angles (in degrees). Could be used for a series of unbinned patterns too. 
         center_guesses (list): List of initial center guesses for the peaks.
         tol_up (float): Upper tolerance for the fitting (peak-specific list).
         tol_down (float): Lower tolerance for the fitting (peak-specific list).
@@ -683,10 +683,10 @@ def write_fityk_script(script_name, fityk_input_pfx, chi, center_guesses, tol_up
     #logger = logger or logging.getLogger(__name__)
 
     fityk_script = ""  #Initialize blank string
-    for i in range(1): # len(chi)):
+    for bin in range(len(chi)): #(This can be changed to a variable name for unbinned, fully integrated patterns in series)
         fityk_script += f"""
         reset
-        @+ <'{fityk_input_pfx}{chi[i]}deg.txt'"""
+        @+ <'{fityk_input_pfx}{chi[bin]}deg.txt'"""
         if bkg_spline is not None:
             fityk_script += f"""
             %bg0 = Spline({','.join(map(str, bkg_spline))})
@@ -707,17 +707,67 @@ def write_fityk_script(script_name, fityk_input_pfx, chi, center_guesses, tol_up
             $_{len(bkg_spline)+4*peak+4} = {{$_{len(bkg_spline)+4*peak+4}}}
             A = a or ({min_q} < x and x < {center_guesses[peak] - tol_down[peak]})
             A = a or ({center_guesses[peak] + tol_up[peak]} < x and x < {max_q})"""
-         
+
+        fityk_script += f"""
+        @0: info peaks > '{fityk_input_pfx}{chi[bin]}deg.peaks'"""   
+    
     with open(script_name, "w") as f:
         f.write(fityk_script)
     #logger.info(f"Fityk script written to: {script_name}")
+
+def format_fityk_outputs(fityk_input_pfx, chi, num_peaks, output_dir = None, logger = None):
+    """
+    Reads the .peaks files and concatenates the peak center data into a convenient array like Aaron's
+
+    Args:
+        fityk_input_pfx (str): Prefix path for the Fityk input files.
+        chi (list): List of azimuthal angles (in degrees).
+
+    Returns:
+        outputs a file formatted like Aaron's q_vs_chi_peaks.txt (with new formatting)
+    """
+    logger = logger or logging.getLogger(__name__)
+
+    q_centroids_list = []
+    #q_errors_list = []
+    for bin in range(len(chi)):
+        peaks_file = f"{fityk_input_pfx}{chi[bin]}deg.peaks"
+        if os.path.exists(peaks_file):
+            peaks_data = np.loadtxt(peaks_file, comments=('#'), usecols=tuple(range(2, 9)))
+            # Assuming the first numeric column is the centers
+            q_centroids_list.append(peaks_data[:, 0])  # Fitted q values
+            # q_errors_list.append...
+        else:
+            logger.warning(f"Fityk output file not found: {peaks_file}. Filling with NaNs.")
+            q_centroids_list.append([np.nan] * num_peaks)
+            # q_errors_list.append([np.nan] * num_peaks)
+
+    q_centroids_list = np.reshape(q_centroids_list, (len(chi), num_peaks))
+    q_centroids_arr = np.array(q_centroids_list).T #Keep the transpose for returned arrays b/c of Aaron's subsequent formatting
+    #q_errors_arr = np.array(q_errors_list).T
+
+    bin_labeled_centroids = np.column_stack((chi, q_centroids_arr.T)) #Un-transpose for data readability
+    # bin_labeled_errors = np.column_stack((chi, q_errors_arr.T))
+    peak_headers = "\t".join([f"Peak_{i+1}" for i in range(num_peaks)])
+    headers_with_bin_label = f"Chi_Azimuth_(deg)\t{peak_headers}"
+
+     # Save the results to text files if an output directory is provided
+    if output_dir is not None:
+        q_chi_path = os.path.join(output_dir, "q_vs_chi_peaks_fityk.txt")
+        np.savetxt(q_chi_path, bin_labeled_centroids, fmt="%.6f", delimiter="\t", header=headers_with_bin_label)
+        logger.info(f"q vs chi centroid data (FITYK OUTPUTS!) formatted and saved to: {q_chi_path}")
+
+    else:
+        logger.warning("No output directory provided! q vs chi data was not saved!")
+
+    return q_centroids_arr
 
 def fit_peaks_with_fityk():
     
     pass
 
 
-def plot_q_vs_chi_stacked(q_centroids_arr, output_dir=None, chi_deg=None, dpi=600, plot=True, calibrant=False, logger=None):
+def plot_q_vs_chi_stacked(q_centroids_arr, source_of_fit=None, output_dir=None, chi_deg=None, dpi=600, plot=True, calibrant=False, logger=None):
     """
     Plots each row of q_vs_chi_peaks.txt as a stacked subplot, with chi on the x-axis and q on the y-axis.
     This is useful for visualizing the q(χ) variation for each diffraction ring.
@@ -756,7 +806,10 @@ def plot_q_vs_chi_stacked(q_centroids_arr, output_dir=None, chi_deg=None, dpi=60
             
         axes[-1].set_xlabel('Azimuth χ (°)')
         fig.tight_layout()
-        fig_filename = os.path.join(output_dir, "q_vs_chi_plot.png")
+        if source_of_fit is not None:
+            fig_filename = os.path.join(output_dir, f"q_vs_chi_plot_{source_of_fit}.png")
+        else:
+            fig_filename = os.path.join(output_dir, "q_vs_chi_plot.png")
         fig.savefig(fig_filename)
         plt.close(fig)
         logger.info(f"Stacked q vs chi plot saved to: {fig_filename}")

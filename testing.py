@@ -4,6 +4,7 @@ import logging
 
 def main():
     fityk_input_pfx = "/Users/benjaminschneiderman/Library/CloudStorage/OneDrive-ColoradoSchoolofMines/Code/Python/Analysis_pyFAI-1/2_BinnedIntegrationAndFitting/VB-APS-SSAO-6_25C_TestMap-AO_000492/BinnedOutput/Fityk/mid_azim_"
+    formatted_output_dir = "/Users/benjaminschneiderman/Library/CloudStorage/OneDrive-ColoradoSchoolofMines/Code/Python/Analysis_pyFAI-1/2_BinnedIntegrationAndFitting/VB-APS-SSAO-6_25C_TestMap-AO_000492/"
     chi = np.linspace(1.5, 358.5, 120)
     bkg_spline = [15.98, 36.81, 19.66, 20.96, 23.68, 15.15, 28.26, 11.62, 43.09, 9.33, 48.74, 9.16, 54.32, 5.46, 57.1, 2.47, 61.2, 0.88]
     initial_q_guesses = [ # AL2O3 EXPERIMENT VALID INITIAL GUESSES (Correct peak pos.)
@@ -19,6 +20,10 @@ def main():
     tol_up = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
     tol_down = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
     fl.write_fityk_script("test_fityk_script.fit", fityk_input_pfx, chi, initial_q_guesses, tol_up, tol_down, bkg_spline=bkg_spline)
+
+    #This block will only work after the fityk script has been run in that software
+    q_centroids_arr = fl.format_fityk_outputs(fityk_input_pfx, chi, len(initial_q_guesses), output_dir=formatted_output_dir)
+    fl.plot_q_vs_chi_stacked(q_centroids_arr, source_of_fit="fityk", output_dir=formatted_output_dir, chi_deg=chi)
 
 if __name__ == "__main__":
     main()
