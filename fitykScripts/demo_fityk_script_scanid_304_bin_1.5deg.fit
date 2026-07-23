@@ -1,0 +1,87 @@
+
+        reset
+        @+ <'/Users/benjaminschneiderman/Library/CloudStorage/OneDrive-ColoradoSchoolofMines/Code/Python/Analysis_pyFAI-1/2_BinnedIntegrationAndFitting/VB-APS-SSAO-6_25C_Map-AO_000304/BinnedOutput/Fityk/mid_azim_1.5deg.txt'
+            %bg0 = Spline(15.12,4.59,16.22,2.49,18.02,0.56,20.45,0.03,29.31,-0.06,43.33,-0.03,56.6,-0.06,61.17,-0.06,65.05,-0.03)
+            Y = y - %bg0(x)
+            A = a and not (14 < x and x < 17.603087)
+            A = a and not (18.603087 < x and x < 92)
+            guess PseudoVoigt
+            fit
+            $_19 = {$_19}
+            $_20 = {$_20}
+            $_21 = {$_21}
+            $_22 = {$_22}
+            A = a or (14 < x and x < 17.603087)
+            A = a or (18.603087 < x and x < 92)
+            A = a and not (14 < x and x < 24.177268)
+            A = a and not (25.177268 < x and x < 92)
+            guess PseudoVoigt
+            fit
+            $_23 = {$_23}
+            $_24 = {$_24}
+            $_25 = {$_25}
+            $_26 = {$_26}
+            A = a or (14 < x and x < 24.177268)
+            A = a or (25.177268 < x and x < 92)
+            A = a and not (14 < x and x < 25.9585)
+            A = a and not (26.9585 < x and x < 92)
+            guess PseudoVoigt
+            fit
+            $_27 = {$_27}
+            $_28 = {$_28}
+            $_29 = {$_29}
+            $_30 = {$_30}
+            A = a or (14 < x and x < 25.9585)
+            A = a or (26.9585 < x and x < 92)
+            A = a and not (14 < x and x < 29.70333)
+            A = a and not (30.70333 < x and x < 92)
+            guess PseudoVoigt
+            fit
+            $_31 = {$_31}
+            $_32 = {$_32}
+            $_33 = {$_33}
+            $_34 = {$_34}
+            A = a or (14 < x and x < 29.70333)
+            A = a or (30.70333 < x and x < 92)
+            A = a and not (14 < x and x < 35.688437)
+            A = a and not (36.688437 < x and x < 92)
+            guess PseudoVoigt
+            fit
+            $_35 = {$_35}
+            $_36 = {$_36}
+            $_37 = {$_37}
+            $_38 = {$_38}
+            A = a or (14 < x and x < 35.688437)
+            A = a or (36.688437 < x and x < 92)
+            A = a and not (14 < x and x < 38.82181)
+            A = a and not (39.82181 < x and x < 92)
+            guess PseudoVoigt
+            fit
+            $_39 = {$_39}
+            $_40 = {$_40}
+            $_41 = {$_41}
+            $_42 = {$_42}
+            A = a or (14 < x and x < 38.82181)
+            A = a or (39.82181 < x and x < 92)
+            A = a and not (14 < x and x < 44.330282)
+            A = a and not (45.330282 < x and x < 92)
+            guess PseudoVoigt
+            fit
+            $_43 = {$_43}
+            $_44 = {$_44}
+            $_45 = {$_45}
+            $_46 = {$_46}
+            A = a or (14 < x and x < 44.330282)
+            A = a or (45.330282 < x and x < 92)
+            A = a and not (14 < x and x < 45.338482)
+            A = a and not (46.338482 < x and x < 92)
+            guess PseudoVoigt
+            fit
+            $_47 = {$_47}
+            $_48 = {$_48}
+            $_49 = {$_49}
+            $_50 = {$_50}
+            A = a or (14 < x and x < 45.338482)
+            A = a or (46.338482 < x and x < 92)
+            
+        # @0: info peaks > '/Users/benjaminschneiderman/Library/CloudStorage/OneDrive-ColoradoSchoolofMines/Code/Python/Analysis_pyFAI-1/2_BinnedIntegrationAndFitting/VB-APS-SSAO-6_25C_Map-AO_000304/BinnedOutput/Fityk/mid_azim_1.5deg.peaks'

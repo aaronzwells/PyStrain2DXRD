@@ -680,7 +680,8 @@ def write_fityk_script(script_name, fityk_input_pfx, chi, center_guesses, tol_up
         max_q (float): Maximum global q-value for the fitting range.
 
     """
-    #logger = logger or logging.getLogger(__name__)
+    import os
+    logger = logger or logging.getLogger(__name__)
 
     fityk_script = ""  #Initialize blank string
     for bin in range(len(chi)): #(This can be changed to a variable name for unbinned, fully integrated patterns in series)
@@ -710,8 +711,9 @@ def write_fityk_script(script_name, fityk_input_pfx, chi, center_guesses, tol_up
 
         fityk_script += f"""
         @0: info peaks > '{fityk_input_pfx}{chi[bin]}deg.peaks'"""   
-    
-    with open(script_name, "w") as f:
+
+    script_name_full = os.path.join(os.getcwd(), "fitykScripts", script_name)
+    with open(script_name_full, "w") as f:
         f.write(fityk_script)
     #logger.info(f"Fityk script written to: {script_name}")
 
@@ -733,7 +735,7 @@ def format_fityk_outputs(fityk_input_pfx, chi, num_peaks, output_dir = None, log
     for bin in range(len(chi)):
         peaks_file = f"{fityk_input_pfx}{chi[bin]}deg.peaks"
         if os.path.exists(peaks_file):
-            peaks_data = np.loadtxt(peaks_file, comments=('#'), usecols=tuple(range(2, 9)))
+            peaks_data = np.loadtxt(peaks_file, comments=('#'), usecols=tuple(range(2, num_peaks+1)))
             # Assuming the first numeric column is the centers
             q_centroids_list.append(peaks_data[:, 0])  # Fitted q values
             # q_errors_list.append...
@@ -762,8 +764,9 @@ def format_fityk_outputs(fityk_input_pfx, chi, num_peaks, output_dir = None, log
 
     return q_centroids_arr
 
+
 def fit_peaks_with_fityk():
-    
+    #This would be a place to call fityk programmatically, if we get to that point
     pass
 
 
@@ -801,7 +804,8 @@ def plot_q_vs_chi_stacked(q_centroids_arr, source_of_fit=None, output_dir=None, 
             # ax.set_title(f'Ring {i+1}')
             ax.set_ylabel(f'q (nm⁻¹)')
             #BS 7/17/26: Ignoring y limit so we can see ALL the fits for now
-            #ax.set_ylim(np.mean(q_vals[mask])-0.05, np.mean(q_vals[mask])+0.05)
+            #BS 7/22:/26: setting to +/- 0.25 from the mean so we can compare Aaron code to fityk
+            ax.set_ylim(np.mean(q_vals[mask])-0.25, np.mean(q_vals[mask])+0.25)
             ax.set_xlim(0, 360)
             
         axes[-1].set_xlabel('Azimuth χ (°)')
@@ -813,6 +817,55 @@ def plot_q_vs_chi_stacked(q_centroids_arr, source_of_fit=None, output_dir=None, 
         fig.savefig(fig_filename)
         plt.close(fig)
         logger.info(f"Stacked q vs chi plot saved to: {fig_filename}")
+
+
+def visualize_distortion_combined_hkl(q0_vs_chi, q_vs_chi, q0_scanid, q_scanid, hkl, output_dir=None, chi_deg=None, dpi=600,  calibrant=False, logger=None):
+    """
+    Visualizes the distortion of multiple diffraction rings by plotting ln(q/q0) vs chi in the same plot
+    
+    Args:
+        q0_vs_chi (list of ndarray): List of q0 vs chi data for each ring.
+        q_vs_chi (list of ndarray): List of q vs chi data for each ring.
+        q0_scanid: Scan ID # of reference location
+        q_scanid: Scan ID # where you are sampling
+        hkl (list of tuple): List of (h, k, l) tuples for each ring.
+        output_dir (str, optional): Directory to save the output plot. Defaults to None.
+        chi_deg (ndarray, optional): Azimuthal angle array in degrees. If None, assumes uniform [0, 360).
+        dpi (int): Resolution of the saved figure.
+        calibrant (bool, optional): If True, applies calibrant-specific settings. Defaults to False.
+        logger (logging.Logger, optional): Logger for status messages. Defaults to None.
+    """
+    logger = logger or logging.getLogger(__name__)
+    
+    num_rings, num_chi = q_vs_chi.shape
+    if chi_deg is None:
+        chi_deg = np.linspace(1.5, 358.5, num_chi, endpoint=False)
+
+    import matplotlib.pyplot as plt
+    plt.rcParams.update({'font.size': 14})
+        # Create a single figure and axis
+    fig, ax = plt.subplots(figsize=(8, 5))
+        # Overlay all rings on the same plot
+    for i, (q0, q) in enumerate(zip(q0_vs_chi, q_vs_chi)):
+        ln_ratio = np.log(q / q0)
+        ax.plot(chi_deg, ln_ratio, '.', markersize=6, label=f'Ring {i+1}')
+    # Format axes and labels
+    ax.set_title(f'Scan ID: {q_scanid}. |||  Ref. Loc. ID: {q0_scanid}')
+    ax.set_xlabel('Azimuth χ (°)')
+    ax.set_ylabel(r'$\ln(q/q_0)$')
+    ax.set_xticks(np.linspace(0, 360, 9))
+    ax.tick_params(direction = 'in')
+    ax.set_ylim(-0.0025, 0.0025)
+    labels = [f'{plane}' for plane in hkl]
+    ax.legend(labels, loc='upper left', fontsize=10, ncols=2)
+    fig.tight_layout()
+    if output_dir is not None:
+        fig_filename = os.path.join(output_dir, "strain_vs_chi_plot_combined_hkl.png")
+        fig.savefig(fig_filename)
+        plt.close(fig)
+        logger.info(f"Distortion combined HKL plot saved to: {fig_filename}")
+    
+    return fig, ax #Allows you to add on the fit to the plot in a later function
 
 # --- Plot strain vs chi stacked (modeled after plot_q_vs_chi_stacked) ---
 def plot_strain_vs_chi_stacked(file_path, output_dir=None, chi_deg=None, dpi=600, plot=True, calibrant=False, logger=None):

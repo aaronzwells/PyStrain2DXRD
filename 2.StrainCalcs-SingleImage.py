@@ -60,10 +60,10 @@ def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tenso
     # tif_file      = "InputFiles/Feb2025_Calibrant_Patterns/Feb2025_ceria_71p676keV_1145mm_100x100_3s_000112.avg.tiff"  
 
    #FEBRUARY Before Thermal Cycle, Zero Strain Position (#304)
-    # tif_file      = "InputFiles/Feb2025_Zero_Strain_Locations/VB-APS-SSAO-6_25C_Map-AO_000304.avg.tiff"
+    tif_file      = "InputFiles/Feb2025_Zero_Strain_Locations/VB-APS-SSAO-6_25C_Map-AO_000304.avg.tiff"
 
     #FEBRUARY Before Thermal Cycle, Arbitrary Location (#492)
-    tif_file      = "InputFiles/Feb2025_25C_AO_Before/VB-APS-SSAO-6_25C_TestMap-AO_000492.avg.tiff"
+    # tif_file      = "InputFiles/Feb2025_25C_AO_Before/VB-APS-SSAO-6_25C_TestMap-AO_000492.avg.tiff"
 
     #---------------------------------------------------------------------------------------------------------------------
 
@@ -88,6 +88,8 @@ def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tenso
     save_chi_files = False # this determines whether every q vs chi bin dataset is saved as a separate file or if the file writing is skipped
     save_txt_for_fityk = True # Option to save a clean .txt file in a separate folder for Fityk scripting, to compare to Aaron's fitting code
     examine_bins = True # If you want to visualize the binned data, set this to True. Should not typically be needed now that the intensity issue is corrected. 
+
+    USE_FITYK_FITS = True # Use Fityk fits for the strain calculation instead of Aaron's fl.fit_peaks_with_initial_guesses.
 
     # initial_q_guesses = [ # CeO2 CALIBRANT VALID INITIAL GUESSES (Correct peak pos.)
     #             20.108632,
@@ -169,17 +171,20 @@ def nobatch_main_pipeline(tif_override=None, batch_output_dir=None, output_tenso
         #The function puts the plots in a subdirectory in the same BinnedOutput folder
 
     # Fits the q vs χ data to the Pseudo-Voigt function to find the peak centroids for each bin and ring
-    q_vs_chi, q_vs_chi_errors, q_chi_path = fl.fit_peaks_with_initial_guesses(
-        I2d, 
-        chi,
-        q, 
-        initial_q_guesses, 
-        delta_tol=delta_tol, 
-        eta0=eta0, 
-        delta_array=tol_array, 
-        output_dir=output_path,
-        logger=file_logger)
-    
+    if not USE_FITYK_FITS:
+        q_vs_chi, q_vs_chi_errors, q_chi_path = fl.fit_peaks_with_initial_guesses(
+            I2d, 
+            chi,
+            q, 
+            initial_q_guesses, 
+            delta_tol=delta_tol, 
+            eta0=eta0, 
+            delta_array=tol_array, 
+            output_dir=output_path,
+            logger=file_logger)
+    else: #For now, just read the Fityk outputs, still required to run the fityk script manually (for now, for a single pattern)
+        q_vs_chi = fl.format_fityk_outputs(fityk_input_pfx, chi, len(initial_q_guesses), output_dir=output_path)
+        
     fl.plot_q_vs_chi_stacked(
         q_vs_chi,
         output_dir=output_path,
