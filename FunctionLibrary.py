@@ -709,20 +709,44 @@ def write_fityk_script(script_name, fityk_input_pfx, chi, center_guesses, tol_up
             A = a or ({min_q} < x and x < {center_guesses[peak] - tol_down[peak]})
             A = a or ({center_guesses[peak] + tol_up[peak]} < x and x < {max_q})"""
 
+        #Old: write a separate .peaks file
+        # fityk_script += f"""
+        # @0: info peaks > '{fityk_input_pfx}{chi[bin]}deg.peaks'""" 
+
+        #New: use lua to keep running file of peak centers for less i/o burden
+
+        running_file_name = fityk_input_pfx[:-9]+"peak_centers.txt" #trims mid_azim_ and writes file in the Fityk folder
         fityk_script += f"""
-        @0: info peaks > '{fityk_input_pfx}{chi[bin]}deg.peaks'"""   
+        lua f = io.open("{running_file_name}", "a"); funcs = F:get_components(0); for i=0,#funcs-1 do f:write(funcs[i]:get_param_value("center") .. "\\n") end; f:close()"""
 
     script_name_full = os.path.join(os.getcwd(), "fitykScripts", script_name)
     with open(script_name_full, "w") as f:
         f.write(fityk_script)
     #logger.info(f"Fityk script written to: {script_name}")
 
-def format_fityk_outputs(fityk_input_pfx, chi, num_peaks, output_dir = None, logger = None):
+def fit_peaks_with_fityk(scanid, sample_name, chi, bkg_spline, initial_q_guesses, tol_up, tol_down, logger = None):
+    #This would be a place to call fityk programmatically, if we get to that point
+    
+    scan_name = f"{sample_name}_{scanid:06d}"
+    fityk_input_pfx = os.path.join(os.getcwd(), "2_BinnedIntegrationAndFitting", scan_name, "BinnedOutput/Fityk/mid_azim_")
+    
+    script_name = f"fityk_script_scanid_{scanid}_bins_all.fit"
+    write_fityk_script(script_name, fityk_input_pfx, chi, initial_q_guesses, tol_up, tol_down, bkg_spline=bkg_spline)
+    script_name_full = os.path.join(os.getcwd(), "fitykScripts", script_name)
+
+    import subprocess
+    fityk_bin = "/Applications/Fityk 2.app/Contents/MacOS/fityk"
+     # Pass the script file path directly as the last argument
+    subprocess.run([fityk_bin, script_name_full])
+    
+
+def format_fityk_outputs(scanid, sample_name, chi, num_peaks, output_dir = None, logger = None):
     """
-    Reads the .peaks files and concatenates the peak center data into a convenient array like Aaron's
+    Reads the single peak_centers file and reshape the peak center data into a convenient array like Aaron's
 
     Args:
-        fityk_input_pfx (str): Prefix path for the Fityk input files.
+        scan id: unique scan identifying number
+        sample_name: filename given at APS
         chi (list): List of azimuthal angles (in degrees).
 
     Returns:
@@ -732,17 +756,14 @@ def format_fityk_outputs(fityk_input_pfx, chi, num_peaks, output_dir = None, log
 
     q_centroids_list = []
     #q_errors_list = []
-    for bin in range(len(chi)):
-        peaks_file = f"{fityk_input_pfx}{chi[bin]}deg.peaks"
-        if os.path.exists(peaks_file):
-            peaks_data = np.loadtxt(peaks_file, comments=('#'), usecols=tuple(range(2, num_peaks+1)))
-            # Assuming the first numeric column is the centers
-            q_centroids_list.append(peaks_data[:, 0])  # Fitted q values
-            # q_errors_list.append...
-        else:
-            logger.warning(f"Fityk output file not found: {peaks_file}. Filling with NaNs.")
-            q_centroids_list.append([np.nan] * num_peaks)
-            # q_errors_list.append([np.nan] * num_peaks)
+
+    scan_name = f"{sample_name}_{scanid:06d}"
+    peak_centers_file= os.path.join(os.getcwd(), "2_BinnedIntegrationAndFitting", scan_name, "BinnedOutput/Fityk/peak_centers.txt")
+ 
+    if os.path.exists(peak_centers_file):
+        q_centroids_list = np.loadtxt(peak_centers_file)
+    else:
+        logger.warning(f"Fityk output file not found: {peak_centers_file}. Filling with NaNs.")
 
     q_centroids_list = np.reshape(q_centroids_list, (len(chi), num_peaks))
     q_centroids_arr = np.array(q_centroids_list).T #Keep the transpose for returned arrays b/c of Aaron's subsequent formatting
@@ -764,10 +785,6 @@ def format_fityk_outputs(fityk_input_pfx, chi, num_peaks, output_dir = None, log
 
     return q_centroids_arr
 
-
-def fit_peaks_with_fityk():
-    #This would be a place to call fityk programmatically, if we get to that point
-    pass
 
 
 def plot_q_vs_chi_stacked(q_centroids_arr, source_of_fit=None, output_dir=None, chi_deg=None, dpi=600, plot=True, calibrant=False, logger=None):

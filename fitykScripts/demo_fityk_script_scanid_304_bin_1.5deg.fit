@@ -83,5 +83,4 @@
             $_50 = {$_50}
             A = a or (14 < x and x < 45.338482)
             A = a or (46.338482 < x and x < 92)
-            
-        # @0: info peaks > '/Users/benjaminschneiderman/Library/CloudStorage/OneDrive-ColoradoSchoolofMines/Code/Python/Analysis_pyFAI-1/2_BinnedIntegrationAndFitting/VB-APS-SSAO-6_25C_Map-AO_000304/BinnedOutput/Fityk/mid_azim_1.5deg.peaks'
+        lua f = io.open("/Users/benjaminschneiderman/Library/CloudStorage/OneDrive-ColoradoSchoolofMines/Code/Python/Analysis_pyFAI-1/2_BinnedIntegrationAndFitting/VB-APS-SSAO-6_25C_Map-AO_000304/BinnedOutput/Fityk/peak_centers.txt", "a"); funcs = F:get_components(0); for i=0,#funcs-1 do f:write(funcs[i]:get_param_value("center") .. "\n") end; f:close()
