@@ -1,0 +1,119 @@
+Config: 10 peaks -> 9 fit groups
+  Group 0: [1.8200, 2.2200] (1 peak) — ceria:0
+  Group 1: [2.1200, 2.5200] (1 peak) — ceria:1
+  Group 2: [3.0800, 3.4800] (1 peak) — ceria:2
+  Group 3: [3.7500, 3.9500] (1 peak) — ceria:3
+  Group 4: [3.9200, 4.1200] (1 peak) — ceria:4
+  Group 5: [4.5400, 4.7400] (1 peak) — ceria:5
+  Group 6: [4.9100, 5.3400] (2 peaks) — ceria:6, ceria:7
+  Group 7: [5.5400, 5.8400] (1 peak) — ceria:8
+  Group 8: [5.8800, 6.1800] (1 peak) — ceria:9
+Radial unit: Q
+
+=== Stage 1: Fitting lineouts (1 frames) ===
+
+Group 0: ceria:0
+  Compiling (n_peaks=1, n_roi=301, padded=303)... done (1.5s)
+  Frame 1/1 (#0)
+  Elapsed: 1.9s
+
+Group 1: ceria:1
+  Compiling (n_peaks=1, n_roi=302, padded=303)... done (1.3s)
+  Frame 1/1 (#0)
+  Elapsed: 1.3s
+
+Group 2: ceria:2
+  Compiling (n_peaks=1, n_roi=303)... done (1.3s)
+  Frame 1/1 (#0)
+  Elapsed: 1.3s
+
+Group 3: ceria:3
+  Compiling (n_peaks=1, n_roi=152, padded=303)... done (1.3s)
+  Frame 1/1 (#0)
+  Elapsed: 1.3s
+
+Group 4: ceria:4
+  Compiling (n_peaks=1, n_roi=153, padded=303)... done (1.3s)
+  Frame 1/1 (#0)
+  Elapsed: 1.3s
+
+Group 5: ceria:5
+  Compiling (n_peaks=1, n_roi=153, padded=303)... done (1.3s)
+  Frame 1/1 (#0)
+  Elapsed: 1.3s
+
+Group 6: ceria:6, ceria:7
+  Compiling (n_peaks=2, n_roi=331)... done (2.1s)
+  Frame 1/1 (#0)
+  Elapsed: 2.1s
+
+Group 7: ceria:8
+  Compiling (n_peaks=1, n_roi=233, padded=303)... done (1.3s)
+  Frame 1/1 (#0)
+  Elapsed: 1.4s
+
+Group 8: ceria:9
+  Compiling (n_peaks=1, n_roi=233, padded=303)... done (1.3s)
+  Frame 1/1 (#0)
+  Elapsed: 1.3s
+
+Lineout fitting time: 13.3s
+
+=== Stage 2: Fitting OmegaSumFrame (1 frames x 360 eta bins) ===
+
+Group 0: ceria:0
+  Compiling (n_peaks=1, n_roi=301, padded=303)... done (4.3s)
+  Frame 1/1 (#0)
+  Elapsed: 4.3s
+
+Group 1: ceria:1
+  Compiling (n_peaks=1, n_roi=302, padded=303)... done (4.2s)
+  Frame 1/1 (#0)
+  Elapsed: 4.2s
+
+Group 2: ceria:2
+  Compiling (n_peaks=1, n_roi=303)... done (3.5s)
+  Frame 1/1 (#0)
+  Elapsed: 3.5s
+
+Group 3: ceria:3
+  Compiling (n_peaks=1, n_roi=152, padded=303)... done (4.2s)
+  Frame 1/1 (#0)
+  Elapsed: 4.3s
+
+Group 4: ceria:4
+  Compiling (n_peaks=1, n_roi=153, padded=303)... done (4.1s)
+  Frame 1/1 (#0)
+  Elapsed: 4.1s
+
+Group 5: ceria:5
+  Compiling (n_peaks=1, n_roi=153, padded=303)... done (4.1s)
+  Frame 1/1 (#0)
+  Elapsed: 4.1s
+
+Group 6: ceria:6, ceria:7
+  Compiling (n_peaks=2, n_roi=331)... done (7.3s)
+  Frame 1/1 (#0)
+  Elapsed: 7.3s
+
+Group 7: ceria:8
+  Compiling (n_peaks=1, n_roi=233, padded=303)... done (4.1s)
+  Frame 1/1 (#0)
+  Elapsed: 4.1s
+
+Group 8: ceria:9
+  Compiling (n_peaks=1, n_roi=233, padded=303)... done (4.0s)
+  Frame 1/1 (#0)
+  Elapsed: 4.0s
+
+OmegaSumFrame fitting time: 40.0s
+Results saved to Ceria_1137_test.h5
+  ceria:0: 359 fitted, 1 skipped
+  ceria:1: 359 fitted, 1 skipped
+  ceria:2: 360 fitted, 0 skipped
+  ceria:3: 360 fitted, 0 skipped
+  ceria:4: 360 fitted, 0 skipped
+  ceria:5: 360 fitted, 0 skipped
+  ceria:6, ceria:7: 360 fitted, 0 skipped
+  ceria:8: 360 fitted, 0 skipped
+  ceria:9: 360 fitted, 0 skipped

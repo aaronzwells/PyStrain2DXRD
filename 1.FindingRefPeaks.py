@@ -27,9 +27,12 @@ import os
 poni_file = "0_calibration/Calibration_Feb25_ceria_1145mm_25C_att000_000112.poni" # calibration PONI file. Ben used CeO2
 detector_type = "GE" # "Pilatus" or "GE"
 mask_file = None
+visit = "February"
+
 
 #PLUG IN SINGLE IMAGE TO INGEGRATE AND FIND PEAKS
 #2026 Analysis uses include: Linkam temperature calibration (a few files, not looped), checking Feb/Oct peak position discrepancy
+descriptor = "Calibrant_25C" #Subfolder to organize for my own sanity. Make sure this is correct for any new files undergoing full cake analysis. 
 tif_file = "InputFiles/Feb2025_Calibrant_Patterns/Feb2025_ceria_71p676keV_1145mm_100x100_3s_000112.avg.tiff" # representative data TIF file
 
 
@@ -43,7 +46,7 @@ def main(
     filename = fl.remove_filename_extension(tif_file)
     
     # Creates an output directory of the same name as the mapping image to store all the data for that map image location
-    outputPath = os.path.join("1_UnbinnedIntegration_PeakFinding", filename)
+    outputPath = os.path.join("1_UnbinnedIntegration_PeakFinding", visit, descriptor, filename)
     output_path = fl.create_directory(outputPath)
     print(f"[INFO] Output Path is {output_path}")
 

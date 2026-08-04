@@ -1,6 +1,6 @@
 peaks:
   - phase: "ceria"
-    center: [2.02, 2.32, 3.28, 3.85, 4.02, 4.64, 5.06, 5.19, 5.69, 6.03]
+    center: [2.02, 2.32, 3.28, 3.85, 4.02, 4.64, 5.06, 5.19, 5.69, 6.03] #q in inv. Ang.
     roi:    [ 0.2,  0.2,  0.2,  0.1,  0.1,  0.1, 0.15, 0.15, 0.15, 0.15]
 #    center: [6.03]
 #    roi:    [0.15]
@@ -8,7 +8,7 @@ peaks:
 #    roi: [20, 20, 20]
 
 model: "pseudo_voigt"
-radial_unit: Q
+radial_unit: Q # in inverse Angstroms
 #radial_unit: R
 radial_scale: 1
 background: "linear"
