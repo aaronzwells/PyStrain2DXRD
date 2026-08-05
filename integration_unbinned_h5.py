@@ -1,4 +1,14 @@
-"""Integrate 2D diffraction patterns and find peaks for a single image"""
+"""
+    - Derived from Aaron's Script 1
+    - Alternative Unbinned Integration with HDF5 Output
+    - Integrates with full cake (360º) in batch for a series of map scans
+    - Supports Use of Andrew's waxs_peakfit and waxs_viewer package
+    - Targeting one run, yielding one .h5 per map scan for readability with Andrew's code
+    - Cannibalizing some of Aaron's functions and trying to streamline
+
+    - This version unlikely to yield individual data files for easy user viewing (although we could, but is this just clutter?)... 
+    retain Aaron's original script for that
+"""
 
 import FunctionLibrary as fl
 import numpy as np
@@ -11,41 +21,83 @@ import h5py
 from pyFAI.io import HDF5Writer
 
 
-######## SCRIPT 1 PARAMETERS ########
+################# OVERARCHING SAMPLE NOTES ##########################
 
 #Sample 6: February Dataset
 #Samples 5, 3, 2: October Dataset
 
-#OCTOBER 2025 BEAMTIME CALIBRATION PARAMETERS: 
-# poni_file = "0_calibration/Calibration_Oct25_ceria_900mm_linkam_30C_att000_0006091.poni" # calibration PONI file. I used CeO2 
-# detector_type = "Pilatus" # "Pilatus" or "GE"
-# mask_file = "0_calibration/pilatus_mask.msk" # Either "path/to/your/mask.tif" or None
-# visit = "Oct2025"
-
-#FEBRUARY 2025 BEAMTIME CALIBRATION PARAMETERS (AARON): (This calibration gives incorrect CeO2 rm. temp values! But is what Aaron used.)
-# poni_file = "0_calibration/Calibration_LaB6_100x100_3s_r8_mod2.poni" # calibration PONI file. Aaron used LaB6
-# detector_type = "GE" # "Pilatus" or "GE"
-# mask_file = None
-# visit = "Feb2025"
+########### CALIBRATION PARAMETERS #####################
 
 #FEBRUARY 2025 BEAMTIME CALIBRATION PARAMETERS (BEN): 
 poni_file = "0_calibration/Calibration_Feb25_ceria_1145mm_25C_att000_000112.poni" # calibration PONI file. Ben used CeO2
 detector_type = "GE" # "Pilatus" or "GE"
 mask_file = None
 visit = "Feb2025" #Subfolder to separate full cake results by visit.
+#Note: local_folder = "/Users/benjaminschneiderman/APS_Data_Local/APS_2025-02/InputFiles"
+
+#OCTOBER 2025 BEAMTIME CALIBRATION PARAMETERS: 
+# poni_file = "0_calibration/Calibration_Oct25_ceria_900mm_linkam_30C_att000_0006091.poni" # calibration PONI file. I used CeO2 
+# detector_type = "Pilatus" # "Pilatus" or "GE"
+# mask_file = "0_calibration/pilatus_mask.msk" # Either "path/to/your/mask.tif" or None
+# visit = "Oct2025"
+# Note: local_folder = "/Users/benjaminschneiderman/APS_Data_Local/APS_2025-10/pilatus"
+
+########################################################
+
+#Parameters for the map scan you will package into a single hdf5
+local_folder = "/Users/benjaminschneiderman/APS_Data_Local/APS_2025-02/InputFiles" #Point to local storage to avoid cluttering OneDrive
+isolated_mapscan_location = "Feb2025_OnHeat_25C" #Grouping the maps for organization
+beamtime_given_prefix = "VB-APS-SSAO-6_25C_TestMap-AO_"
+scan_range = (169, 520) #Beamtime assigned scan IDs
+
+# Reference path: InputFiles/Feb2025_OnHeat_25C/VB-APS-SSAO-6_25C_TestMap-AO_000169.avg.tiff
+
+def get_tif_file(scan_id):
+    return os.path.join(local_folder, isolated_mapscan_location, f"{beamtime_given_prefix}{scan_id:06d}.avg.tiff")
 
 
-#PLUG IN SINGLE IMAGE TO INGEGRATE AND FIND PEAKS
-descriptor = "Calibrant_25C" #Subfolder to organize for my own sanity. Make sure this is correct for any new files undergoing full cake analysis. 
-tif_file = "InputFiles/Feb2025_Calibrant_Patterns/Feb2025_ceria_71p676keV_1145mm_100x100_3s_000112.avg.tiff" # representative data TIF file
+def main():
+
+    # Create output location for the single .h5, outside the main loop
+    output_path = os.path.join("1_UnbinnedIntegration_PeakFinding", visit, isolated_mapscan_location)
+    fl.create_directory(output_path, exist_ok=True)
+
+    # Intialize .hdf5 writer: single file per map scan
+    h5_path = os.path.join(output_path, f"scan_range_{scan_range[0]}_{scan_range[1]}.h5")
+    writer = HDF5Writer(filename=h5_path)
+    writer.init_file()
+
+    # Inclusive range from scan_range[0] to scan_range[1]
+    for scan_id in range(scan_range[0], scan_range[1] + 1):
+        indiv_file_path = get_tif_file(scan_id)
+
+        # Skip missing frame files gracefully if a scan in the range was aborted/missing
+        if not os.path.exists(indiv_file_path):
+            print(f"Warning: File not found for scan {scan_id:06d}, skipping...")
+            continue
+
+        # Load image data
+        image = fabio.open(indiv_file_path).data
+        # EXTREMELY IMPORTANT: Flip the image AND MASK vertically for Pilatus detector: MATCHES Oct. 25 CALIBRATION
+        image = np.flipud(image) if detector_type == "Pilatus" else image   
+
+        # Perform 1D pyFAI integration
+        npt = 2000 # number of radial bins
+        result = ai.integrate1d(image, npt, mask=mask, dummy=np.nan, unit="q_nm^-1")
+
+        # Format entry_name using zero-padded scan_id to keep HDF5 keys sorted naturally
+        entry_key = f"scan_{scan_id:06d}"
+
+        # Append integration result into the open .h5 file
+        writer.write(result, entry_name=entry_key)
+
+    # Close the HDF5 writer once all scans are processed
+    writer.close()
+    print(f"UNBINNED INTEGRATION: Successfully saved scans {scan_range[0]} through {scan_range[1]} into: {h5_path}")
 
 
-def main(
-        poni_file=poni_file, 
-        tif_file=tif_file, 
-        height_frac=0.1, 
-        distance=20):
-    
+    #######AARON Script 1########
+
     # This removes the file extension and .avg from the end of the averaged image files
     filename = fl.remove_filename_extension(tif_file)
     
