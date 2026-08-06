@@ -48,7 +48,7 @@ visit = "Feb2025" #Subfolder to separate full cake results by visit.
 local_folder = "/Users/benjaminschneiderman/APS_Data_Local/APS_2025-02/InputFiles" #Point to local storage to avoid cluttering OneDrive
 isolated_mapscan_location = "Feb2025_OnHeat_25C" #Grouping the maps for organization
 beamtime_given_prefix = "VB-APS-SSAO-6_25C_TestMap-AO_"
-scan_range = (171, 172) #Beamtime assigned scan IDs
+scan_range = (169, 520) #Beamtime assigned scan IDs
 
 # Reference path: InputFiles/Feb2025_OnHeat_25C/VB-APS-SSAO-6_25C_TestMap-AO_000169.avg.tiff
 
@@ -121,7 +121,7 @@ def main():
 
         # Skip missing frame files gracefully if a scan in the range was aborted/missing
         if not os.path.exists(indiv_file_path):
-            print(f"Warning: Filye not found for scan {scan_id:06d}, skipping...")
+            print(f"Warning: File not found for scan {scan_id:06d}, skipping...")
             continue
 
         # Load image data

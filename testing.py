@@ -1,15 +1,28 @@
 import yaml
 import h5py
+import numpy as np
     
 with h5py.File("Ceria_1137.h5", "r") as f:
     print("Demo OmegaSumFrame shape:", f["OmegaSumFrame"].shape)
     print("Demo Q_map shape:", f["geometry_maps/Q_map"].shape)
     print("Demo Eta_map shape:", f["geometry_maps/Eta_map"].shape)
 
-with h5py.File("2_BinnedIntegrationAndFitting/Feb2025/Feb2025_OnHeat_25C/scan_range_171_172.h5", "r") as f:
+with h5py.File("your_output.h5", "r") as f:
     print("Yours OmegaSumFrame shape:", f["OmegaSumFrame"].shape)
     print("Yours Q_map shape:", f["geometry_maps/Q_map"].shape)
     print("Yours Eta_map shape:", f["geometry_maps/Eta_map"].shape)
+
+with h5py.File("Ceria_1137.h5", "r") as f:
+    q_map = f["geometry_maps/Q_map"][:]
+    eta_map = f["geometry_maps/Eta_map"][:]
+
+# If Q varies along axis 0 (rows) and is constant along axis 1 (columns),
+# that confirms Q_map[:, 0] sweeps through all q values, matching Q_map.shape[0] = npt_rad
+print("Q varies along axis 0?", not np.allclose(q_map[:, 0], q_map[:, 1]))
+print("Q constant along axis 1?", np.allclose(q_map[0, :], q_map[0, :].mean()))
+
+print("Eta varies along axis 1?", not np.allclose(eta_map[0, :], eta_map[1, :]))
+print("Eta constant along axis 0?", np.allclose(eta_map[:, 0], eta_map[:, 0].mean()))
 
 
 # chi = np.linspace(1.5, 358.5, 120)
