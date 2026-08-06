@@ -1,8 +1,15 @@
 import yaml
+import h5py
     
+with h5py.File("Ceria_1137.h5", "r") as f:
+    print("Demo OmegaSumFrame shape:", f["OmegaSumFrame"].shape)
+    print("Demo Q_map shape:", f["geometry_maps/Q_map"].shape)
+    print("Demo Eta_map shape:", f["geometry_maps/Eta_map"].shape)
 
-
-
+with h5py.File("2_BinnedIntegrationAndFitting/Feb2025/Feb2025_OnHeat_25C/scan_range_171_172.h5", "r") as f:
+    print("Yours OmegaSumFrame shape:", f["OmegaSumFrame"].shape)
+    print("Yours Q_map shape:", f["geometry_maps/Q_map"].shape)
+    print("Yours Eta_map shape:", f["geometry_maps/Eta_map"].shape)
 
 
 # chi = np.linspace(1.5, 358.5, 120)

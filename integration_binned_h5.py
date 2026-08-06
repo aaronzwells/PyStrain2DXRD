@@ -1,13 +1,13 @@
 """
-    - Derived from Aaron's Script 1
-    - Alternative Unbinned Integration with HDF5 Output
-    - Integrates with full cake (360º) in batch for a series of map scans
+    - Alternative BINNED Integration with HDF5 Output
+    - Same workflow and output structure as unbinned integration
+    - Integrates with azimuthal binning (e.g., 3º) in batch for a series of map scans
     - Supports Use of Andrew's waxs_peakfit and waxs_viewer package
     - Targeting one run, yielding one .h5 per map scan for readability with Andrew's code
-    - Cannibalizing some of Aaron's functions and trying to streamline
+    - pyFAI essentialls are borrowed from Aaron's Script 2 and/or function library
 
     - This version unlikely to yield individual data files for easy user viewing (although we could, but is this just clutter?)... 
-    retain Aaron's original script for that
+    retain Aaron's original script for that. Update: Andrew's viewer makes this largely irrelevant
 """
 
 import FunctionLibrary as fl
@@ -48,7 +48,7 @@ visit = "Feb2025" #Subfolder to separate full cake results by visit.
 local_folder = "/Users/benjaminschneiderman/APS_Data_Local/APS_2025-02/InputFiles" #Point to local storage to avoid cluttering OneDrive
 isolated_mapscan_location = "Feb2025_OnHeat_25C" #Grouping the maps for organization
 beamtime_given_prefix = "VB-APS-SSAO-6_25C_TestMap-AO_"
-scan_range = (169, 520) #Beamtime assigned scan IDs
+scan_range = (171, 172) #Beamtime assigned scan IDs
 
 # Reference path: InputFiles/Feb2025_OnHeat_25C/VB-APS-SSAO-6_25C_TestMap-AO_000169.avg.tiff
 
@@ -80,7 +80,7 @@ def get_tif_file(scan_id):
 def main():
     
     # Create output location for the single .h5, outside the main loop
-    output_path = os.path.join("1_UnbinnedIntegration_PeakFinding", visit, isolated_mapscan_location)
+    output_path = os.path.join("2_BinnedIntegrationAndFitting", visit, isolated_mapscan_location)
     fl.create_directory(output_path)
 
     # --- Setup file logger for pipeline ---
@@ -104,15 +104,16 @@ def main():
         ).strip().lower()
 
         if response != "y":
-            file_logger.info(f"UNBINNED INTEGRATION: HDF5 file already exists for scans {scan_range[0]} through {scan_range[1]}, skipping...")
+            file_logger.info(f"BINNED INTEGRATION: HDF5 file already exists for scans {scan_range[0]} through {scan_range[1]}, skipping...")
             return 
         else:
-            file_logger.info(f"UNBINNED INTEGRATION: Overwriting existing HDF5 file for scans {scan_range[0]} through {scan_range[1]}...")
+            file_logger.info(f"BINNED INTEGRATION: Overwriting existing HDF5 file for scans {scan_range[0]} through {scan_range[1]}...")
             os.remove(h5_path)
 
     intensity_list = []
     frame_names_list = []
     q_shared = None  # radial axis is the same every call (same poni/mask/npt)
+    eta_shared = None  # azimuthal axis is the same every call (same poni/mask/npt)
 
     print("\n")
     for scan_id in range(scan_range[0], scan_range[1] + 1):
@@ -128,37 +129,87 @@ def main():
         # EXTREMELY IMPORTANT: Flip the image AND MASK vertically for Pilatus detector: MATCHES Oct. 25 CALIBRATION
         image = np.flipud(image) if detector_type == "Pilatus" else image   
 
-        # Perform 1D pyFAI integration
+        # Perform 2D pyFAI integration
         ai = pyFAI.load(poni_file)
-        npt = 2000 # number of radial bins
-        result = ai.integrate1d(image, npt, mask=mask, dummy=np.nan, unit="q_nm^-1")
+        npt_rad = 2000 # number of radial bins
+        npt_azim = 120 # number of azimuthal bins
+        result = ai.integrate2d(image, npt_rad, npt_azim, mask=mask, dummy=np.nan, unit="q_nm^-1")
 
         if q_shared is None:
-            q_shared = result.radial / 10  # capture once; identical for every frame. Convert to inv. Angstroms to match Andrew's code
+            q_1d = result.radial / 10.0      # Å^-1, length npt_rad
+            eta_1d = result.azimuthal        # deg, length npt_azim
+            # Build full 2D maps matching (npt_rad, npt_azim) to mirror demo file structure
+            q_shared, eta_shared = np.meshgrid(q_1d, eta_1d, indexing="ij")
 
-        intensity_list.append(result.intensity)
+        intensity_list.append(result.intensity.T)  # transpose (azim, rad) -> (rad, azim) to match demo convention
         frame_names_list.append(f"scan_{scan_id:06d}")
 
-        file_logger.info(f"UNBINNED INTEGRATION: Done with scan {scan_id}")
+        file_logger.info(f"BINNED INTEGRATION: Done with scan {scan_id}")
 
     with h5py.File(h5_path, "a") as h5f:
-        lineouts = np.vstack(intensity_list)  # shape (n_frames, n_bins)
+        omega_sum = np.stack(intensity_list)  # shape (n_frames, npt_rad, npt_azim)
+        dset_omega = h5f.create_dataset("OmegaSumFrame", data=omega_sum, compression="gzip")
+        dset_omega.attrs["units"] = "a.u."
+
+        lineouts = np.nansum(omega_sum, axis=2)  # sum over azimuth -> shape (n_frames, npt_rad)
         dset_lineouts = h5f.create_dataset("lineouts", data=lineouts, compression="gzip")
         dset_lineouts.attrs["units"] = "a.u."
 
         geom = h5f.require_group("geometry_maps")
-        dset_q = geom.create_dataset("Q_map", data=q_shared.reshape(-1, 1), compression="gzip")
+        dset_q = geom.create_dataset("Q_map", data=q_shared, compression="gzip")
         dset_q.attrs["units"] = "Å^-1"
+
+        dset_eta = geom.create_dataset("Eta_map", data=eta_shared, compression="gzip")
+        dset_eta.attrs["units"] = "deg"
 
         h5f.create_dataset(
             "frame_names",
-            data=np.array(frame_names_list, dtype="S"),  # fixed-length byte strings, h5py-friendly
+            data=np.array(frame_names_list, dtype="S"),
         )
-
+    
     print("\n")
-    file_logger.info(f"UNBINNED INTEGRATION: Successfully saved scans {scan_range[0]} through {scan_range[1]} into: {h5_path}")
+    file_logger.info(f"BINNED INTEGRATION: Successfully saved scans {scan_range[0]} through {scan_range[1]} into: {h5_path}")
 
 if __name__ == "__main__":
     main()
 
+
+
+    ####### From AARON Script 1 ########
+    
+#     # Save temporary file to use with validate_curve_fitting()
+#     # temp_int_file = "temp_intensity.int"
+#     # np.savetxt(temp_int_file, np.column_stack((q, I, np.zeros_like(q))), fmt="%.6f")
+
+#     # Call validate_curve_fitting to fit peaks
+#     peak_positions_q = fl.fit_peak_centroids(q, I, height_frac=height_frac, distance=distance)
+#     peak_positions_d = 2 * np.pi / np.array(peak_positions_q)
+#     # os.remove(temp_int_file)
+
+#     # Save peaks to file
+#     output_txt = os.path.join(output_path,"peak_positions.txt")
+#     np.savetxt(output_txt, np.column_stack((peak_positions_q, peak_positions_d)),
+#                  fmt="%.6f", delimiter="\t", header="q [nm^-1] \t d [nm]")
+#     print(f"Detected {len(peak_positions_q)} peaks. Saved to {output_txt}")
+
+#     # Save q & I data to a file
+#     np.savetxt(f"{output_path}/q_vs_I.txt", np.column_stack((q, I)), fmt="%.6f", delimiter=" ")
+
+#     # Plot the pattern and detected peaks
+#     plt.figure(figsize=(5, 3))
+#     plt.plot(q, I, label='Integrated pattern', linewidth=1.0, color='k')
+#     plt.plot(peak_positions_q, [np.interp(p, q, I) for p in peak_positions_q], 'rx', label='Fitted Peaks')
+#     plt.xlabel("q [nm$^{-1}$]")
+#     plt.ylabel("Intensity [a.u.]")
+#     # plt.title("1D Azimuthally Integrated Pattern with Peak Locations")
+
+#     ax = plt.gca()
+#     ax.xaxis.set_major_locator(ticker.MultipleLocator(10))
+#     ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(5))
+#     ax.set_xlim(10,90)
+    
+#     # plt.legend()
+#     plt.tight_layout()
+#     plt.savefig(f"{output_path}/peak_detection_plot.png", dpi=600)
+#     # plt.show()
 
