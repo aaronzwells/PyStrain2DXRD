@@ -98,53 +98,65 @@ def main():
     # Intialize .hdf5 writer: single file per map scan
     h5_path = os.path.join(output_path, f"scan_range_{scan_range[0]}_{scan_range[1]}.h5")
     if os.path.exists(h5_path):
-        file_logger.info(f"UNBINNED INTEGRATION: HDF5 file already exists for scans {scan_range[0]} through {scan_range[1]}, skipping...")
-        return
+        response = input(
+            f"HDF5 file already exists for scans {scan_range[0]} through {scan_range[1]} "
+            f"({h5_path}). Overwrite? [y/N]: "
+        ).strip().lower()
 
-    else:
-        # Inclusive range from scan_range[0] to scan_range[1]
-        print("\n")
-        for scan_id in range(scan_range[0], scan_range[1] + 1):
-            indiv_file_path = get_tif_file(scan_id)
+        if response != "y":
+            file_logger.info(f"UNBINNED INTEGRATION: HDF5 file already exists for scans {scan_range[0]} through {scan_range[1]}, skipping...")
+            return 
+        else:
+            file_logger.info(f"UNBINNED INTEGRATION: Overwriting existing HDF5 file for scans {scan_range[0]} through {scan_range[1]}...")
+            os.remove(h5_path)
 
-            # Skip missing frame files gracefully if a scan in the range was aborted/missing
-            if not os.path.exists(indiv_file_path):
-                print(f"Warning: File not found for scan {scan_id:06d}, skipping...")
-                continue
-
-            # Load image data
-            image = fabio.open(indiv_file_path).data
-            # EXTREMELY IMPORTANT: Flip the image AND MASK vertically for Pilatus detector: MATCHES Oct. 25 CALIBRATION
-            image = np.flipud(image) if detector_type == "Pilatus" else image   
-
-            # Perform 1D pyFAI integration
-            ai = pyFAI.load(poni_file)
-            npt = 2000 # number of radial bins
-            result = ai.integrate1d(image, npt, mask=mask, dummy=np.nan, unit="q_nm^-1")
-            q = result.radial
-            intensity = result.intensity
-
-            # Format entry_name using zero-padded scan_id to keep HDF5 keys sorted naturally
-            entry_key = f"scan_{scan_id:06d}"
-
-           # Create entry group inside .h5 file
-            entry_group = h5f.require_group(entry_key)
-
-            # Write dataset arrays
-            dset_q = entry_group.create_dataset("q", data=q, compression="gzip")
-            dset_q.attrs["units"] = "nm^-1"
-
-            dset_i = entry_group.create_dataset("intensity", data=intensity, compression="gzip")
-            dset_i.attrs["units"] = "a.u."
-
-            # Set NeXus plottable standards (enables direct plotting in silx view / PyMca)
-            entry_group.attrs["NX_class"] = "NXdata"
-            entry_group.attrs["signal"] = "intensity"
-            entry_group.attrs["axes"] = "q"
-            file_logger.info(f"UNBINNED INTEGRATION: Done with scan {scan_id}")
+    intensity_list = []
+    frame_names_list = []
+    q_shared = None  # radial axis is the same every call (same poni/mask/npt)
 
     print("\n")
-    file_logger.info(f"\nUNBINNED INTEGRATION: Successfully saved scans {scan_range[0]} through {scan_range[1]} into: {h5_path}")
+    for scan_id in range(scan_range[0], scan_range[1] + 1):
+        indiv_file_path = get_tif_file(scan_id)
+
+        # Skip missing frame files gracefully if a scan in the range was aborted/missing
+        if not os.path.exists(indiv_file_path):
+            print(f"Warning: Filye not found for scan {scan_id:06d}, skipping...")
+            continue
+
+        # Load image data
+        image = fabio.open(indiv_file_path).data
+        # EXTREMELY IMPORTANT: Flip the image AND MASK vertically for Pilatus detector: MATCHES Oct. 25 CALIBRATION
+        image = np.flipud(image) if detector_type == "Pilatus" else image   
+
+        # Perform 1D pyFAI integration
+        ai = pyFAI.load(poni_file)
+        npt = 2000 # number of radial bins
+        result = ai.integrate1d(image, npt, mask=mask, dummy=np.nan, unit="q_nm^-1")
+
+        if q_shared is None:
+            q_shared = result.radial  # capture once; identical for every frame
+
+        intensity_list.append(result.intensity)
+        frame_names_list.append(f"scan_{scan_id:06d}")
+
+        file_logger.info(f"UNBINNED INTEGRATION: Done with scan {scan_id}")
+
+    with h5py.File(h5_path, "a") as h5f:
+        lineouts = np.vstack(intensity_list)  # shape (n_frames, n_bins)
+        dset_lineouts = h5f.create_dataset("lineouts", data=lineouts, compression="gzip")
+        dset_lineouts.attrs["units"] = "a.u."
+
+        geom = h5f.require_group("geometry_maps")
+        dset_q = geom.create_dataset("Q_map", data=q_shared.reshape(-1, 1), compression="gzip")
+        dset_q.attrs["units"] = "nm^-1"
+
+        h5f.create_dataset(
+            "frame_names",
+            data=np.array(frame_names_list, dtype="S"),  # fixed-length byte strings, h5py-friendly
+        )
+
+    print("\n")
+    file_logger.info(f"UNBINNED INTEGRATION: Successfully saved scans {scan_range[0]} through {scan_range[1]} into: {h5_path}")
 
 if __name__ == "__main__":
     main()
