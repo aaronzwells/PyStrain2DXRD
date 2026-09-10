@@ -14,8 +14,8 @@ radial_scale: 1
 background: "linear"
 
 skip:
-  min_max_intensity: 5
-  min_snr: 0.5
+  min_max_intensity: 20
+  min_snr: 2
 
 drift:
   enable: true
