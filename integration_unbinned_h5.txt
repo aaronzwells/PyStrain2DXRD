@@ -46,12 +46,12 @@ visit = "Feb2025" #Subfolder to separate full cake results by visit.
 
 #Parameters for the map scan you will package into a single hdf5
 local_folder = "/Users/benjaminschneiderman/APS_Data_Local/APS_2025-02/InputFiles" #Point to local storage to avoid cluttering OneDrive
-isolated_mapscan_location = "Feb2025_OnCool_30C" #Grouping the maps for organization
-beamtime_given_prefix = "VB-APS-SSAO-6_30C_cool_Map-AO_"
-scan_range = (1448, 1531) #Beamtime assigned scan IDs
+isolated_mapscan_location = "Feb2025_OnHeat_25C" #Grouping the maps for organization
+beamtime_given_prefix = "VB-APS-SSAO-6_25C_TestMap-AO_"
+scan_range = (492, 492) #Beamtime assigned scan IDs
 
 # Reference path: InputFiles/Feb2025_OnHeat_25C/VB-APS-SSAO-6_25C_TestMap-AO_000169.avg.tiff
- 
+
 def setup_logger(log_path, logger_name=None):
     logger = logging.getLogger(logger_name)
     
@@ -149,7 +149,7 @@ def main():
 
         file_logger.info(f"BINNED INTEGRATION: Done with scan {scan_id}")
 
-    with h5py.File(h5_path, "w") as h5f:
+    with h5py.File(h5_path, "a") as h5f:
         omega_sum = np.stack(intensity_list)  # shape (n_frames, npt_rad, npt_azim)
         dset_omega = h5f.create_dataset("OmegaSumFrame", data=omega_sum, compression="gzip")
         dset_omega.attrs["units"] = "a.u."

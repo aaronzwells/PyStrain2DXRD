@@ -1,5 +1,4 @@
 """WAXS peak fitting engine — fits diffraction peaks per eta bin across frames.
-A. Chuang supplied 7/26/26
 
 Usage:
     python waxs_peakfit.py data.h5 --config peaks.yaml [--output results.h5] [--dry-run] [--frames 0:100]
@@ -37,8 +36,14 @@ def parse_args():
     frame_group = p.add_mutually_exclusive_group()
     frame_group.add_argument('--frames', help='Frame range to include (e.g., 0:100, 0,5,10, all)')
     frame_group.add_argument('--skip', help='Frames to exclude (e.g., 0,5,10 or 0:3)')
+    # --vis N: N >= 0 auto-advances after N seconds; N < 0 pauses and
+    # waits for a key press (or mouse click) to advance to the next
+    # plot. Pressing Esc while paused stops visualization and exits
+    # the fitting for the current group.
     p.add_argument('--vis', nargs='?', type=float, const=1.0, default=None, metavar='N',
-                   help='Visualize fits (hold N seconds per plot, default: 1)')
+                   help='Visualize fits. If N >= 0, pause N seconds per plot '
+                        '(default: 1). If N < 0, wait for any key press to '
+                        'continue to the next plot; pressing Esc exits fitting.')
     p.add_argument('--gpu', type=int, default=None, metavar='ID',
                    help='GPU device ID to use (default: 0)')
     p.add_argument('--lineout-only', action='store_true',
@@ -102,6 +107,86 @@ def _peak_search_bounds(peaks, x, y):
             hi = min(hi, splits[i])
         bounds.append((lo, hi))
     return bounds
+
+
+def _refine_init_params(init_all, x_np, y_np, search_bounds, refine_mask=None):
+    """Recompute per-eta BACKGROUND, center, and amplitude from local data.
+
+    This supersedes an earlier version (`_refine_init_centers_and_amps`)
+    that fixed `amp` by computing `peak_y - bg_at_peak`, but derived
+    `bg_at_peak` from `slope`/`intercept` values that were themselves
+    still inherited wholesale from the lineout fit (or a previous-frame
+    tile) and never rescaled per eta bin. Since the lineout is
+    azimuthally integrated/summed, its background intercept sits on a
+    completely different scale than any single eta bin's background —
+    so `bg_at_peak` was frequently far too high, driving the "fixed"
+    amplitude estimate straight down to its floor value (1.0) anyway.
+    This was a second-order instance of the exact same root-cause bug:
+    wholesale reuse of lineout-derived scalars in a per-eta-bin context.
+
+    Left unaddressed, this is arguably worse than the original bug: this
+    codepath (via the `elif lineout_params is not None:` branch in
+    `fit_group`) always runs at `fi == 0`, since there's no previous
+    frame to fall back on there. If a bad background estimate causes
+    ALL eta bins to fail LM convergence at frame 0, then `all_mask[0]`
+    ends up all False. That in turn means frame 1 also finds no valid
+    previous-frame fit and re-enters this same broken codepath — and so
+    on for every subsequent frame. So a bad estimate at frame 0 alone
+    can silently propagate and degrade convergence for the entire run,
+    not just the first frame.
+
+    We now recompute `slope`/`intercept` locally per eta bin first
+    (using the mean of a few points at each ROI edge, to reduce
+    sensitivity to single-pixel shot noise — a single eta bin has much
+    lower counts than the azimuthally-summed lineout), and only then
+    derive `center`/`amp` from that bin's own internally-consistent
+    background estimate.
+
+    Parameters
+    ----------
+    init_all : np.ndarray, shape (n_eta, n_params)
+        Initial parameter guesses, modified in place and returned.
+    x_np, y_np : np.ndarray
+        Local (unpadded) x-axis and per-eta data, shape (n_roi,) and
+        (n_eta, n_roi) respectively.
+    search_bounds : list of (lo, hi) tuples, one per peak.
+    refine_mask : np.ndarray of bool, shape (n_eta,), optional
+        Which eta bins to overwrite. Defaults to all bins.
+    """
+    n_eta = init_all.shape[0]
+    if refine_mask is None:
+        refine_mask = np.ones(n_eta, dtype=bool)
+    refine_idx = np.where(refine_mask)[0]
+    if refine_idx.size == 0:
+        return init_all
+
+    # --- Step 1: re-derive background (slope, intercept) per eta bin ---
+    n_pts = len(x_np)
+    n_edge = max(1, min(5, n_pts // 4))
+    x_lo = float(np.mean(x_np[:n_edge]))
+    x_hi = float(np.mean(x_np[-n_edge:]))
+    dx = x_hi - x_lo if x_hi != x_lo else 1e-30
+    for ei in refine_idx:
+        y_lo = float(np.mean(y_np[ei, :n_edge]))
+        y_hi = float(np.mean(y_np[ei, -n_edge:]))
+        bg_slope = (y_hi - y_lo) / dx
+        bg_intercept = y_lo - bg_slope * x_lo
+        init_all[ei, -2] = bg_slope
+        init_all[ei, -1] = bg_intercept
+
+    # --- Step 2: re-derive center + amplitude using the fresh per-bin bg ---
+    for pi, (slo, shi) in enumerate(search_bounds):
+        pk_mask = (x_np >= slo) & (x_np <= shi)
+        if not np.any(pk_mask):
+            continue
+        for ei in refine_idx:
+            max_idx = np.argmax(y_np[ei, pk_mask])
+            peak_x = float(x_np[pk_mask][max_idx])
+            peak_y = float(y_np[ei, pk_mask][max_idx])
+            bg_at_peak = init_all[ei, -2] * peak_x + init_all[ei, -1]
+            init_all[ei, 4 * pi + 1] = peak_x
+            init_all[ei, 4 * pi] = max(peak_y - bg_at_peak, 1.0)
+    return init_all
 
 
 def estimate_initial_params(x, y_median, peaks_in_group):
@@ -300,7 +385,6 @@ def fit_group(omega_ds, radial_axis, group, config, frame_indices,
         all_mask[fi] = ~skip
 
         # Initial guess (per-eta) — use unpadded data
-        breakpoint()
         x_np = np.asarray(x[:n_roi])
         y_np = np.asarray(y_all[:, :n_roi])
         if fi > 0 and np.any(all_mask[fi - 1]):
@@ -322,15 +406,15 @@ def fit_group(omega_ds, radial_axis, group, config, frame_indices,
                     init_all[:, 4*pi+1] *= radial_scale
                     init_all[:, 4*pi+2] *= radial_scale
                 init_all[:, -2] /= radial_scale
-            # Override centers with per-eta data max positions
+            # Recompute background, center, and amp from local per-eta
+            # data, but only for bins lacking a valid previous-frame
+            # fit (~prev_valid) so continuity-seeded bins keep their
+            # (more reliable, less noisy) profile-fit-derived guess.
             y_med = np.median(y_np, axis=0)
             search_bounds = _peak_search_bounds(scaled_peaks, x_np, y_med)
-            for pi, (slo, shi) in enumerate(search_bounds):
-                pk_mask = (x_np >= slo) & (x_np <= shi)
-                if np.any(pk_mask):
-                    for ei in range(n_eta):
-                        max_idx = np.argmax(y_np[ei, pk_mask])
-                        init_all[ei, 4*pi+1] = float(x_np[pk_mask][max_idx])
+            init_all = _refine_init_params(
+                init_all, x_np, y_np, search_bounds,
+                refine_mask=~prev_valid)
         elif lineout_params is not None:
             init_all = np.tile(lineout_params[frame_idx], (n_eta, 1))
             if radial_scale != 1.0:
@@ -338,14 +422,15 @@ def fit_group(omega_ds, radial_axis, group, config, frame_indices,
                     init_all[:, 4*pi+1] *= radial_scale
                     init_all[:, 4*pi+2] *= radial_scale
                 init_all[:, -2] /= radial_scale
+            # Every row here is an identical clone of the lineout fit
+            # (no per-eta prior to protect), so refine ALL bins,
+            # including background — this is the codepath that always
+            # runs at fi == 0, so getting it right here matters most.
             y_med = np.median(y_np, axis=0)
             search_bounds = _peak_search_bounds(scaled_peaks, x_np, y_med)
-            for pi, (slo, shi) in enumerate(search_bounds):
-                pk_mask = (x_np >= slo) & (x_np <= shi)
-                if np.any(pk_mask):
-                    for ei in range(n_eta):
-                        max_idx = np.argmax(y_np[ei, pk_mask])
-                        init_all[ei, 4*pi+1] = float(x_np[pk_mask][max_idx])
+            init_all = _refine_init_params(
+                init_all, x_np, y_np, search_bounds,
+                refine_mask=None)
         else:
             init_all = np.zeros((n_eta, n_params))
             for ei in range(n_eta):
@@ -390,11 +475,13 @@ def fit_group(omega_ds, radial_axis, group, config, frame_indices,
                     plt.waitforbuttonpress()
                     if plt.fignum_exists(fig.number):
                         fig.canvas.mpl_disconnect(cid)
-                    if key[0] in ('escape', 'q') or not plt.fignum_exists(fig.number):
+                    # Only Esc exits; any other key press (or mouse
+                    # click) continues to the next plot.
+                    if key[0] == 'escape' or not plt.fignum_exists(fig.number):
                         if plt.fignum_exists(fig.number):
                             plt.ioff()
                             plt.close(fig)
-                        print("  Visualization stopped by user.")
+                        print("  Visualization stopped by user (Esc).")
                         return all_params, all_errors, all_chi2, all_mask, drift_flags
                 else:
                     plt.pause(vis_hold)
@@ -547,11 +634,13 @@ def fit_group_lineout(lineout_ds, radial_axis, group, config, frame_indices,
                 plt.waitforbuttonpress()
                 if plt.fignum_exists(fig.number):
                     fig.canvas.mpl_disconnect(cid)
-                if key[0] in ('escape', 'q') or not plt.fignum_exists(fig.number):
+                # Only Esc exits; any other key press (or mouse click)
+                # continues to the next plot.
+                if key[0] == 'escape' or not plt.fignum_exists(fig.number):
                     if plt.fignum_exists(fig.number):
                         plt.ioff()
                         plt.close(fig)
-                    print("  Visualization stopped by user.")
+                    print("  Visualization stopped by user (Esc).")
                     return all_params, all_errors, all_chi2
             else:
                 plt.pause(vis_hold)
@@ -824,3 +913,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
