@@ -936,6 +936,8 @@ class FitResultWindow(QMainWindow):
         print(f"--- {phase} | {param_name} | Frame {frame_idx} ---")
         print(f"  peakID: Mean / Median / Std ({unit})")
         for i, pi in enumerate(peak_indices):
+            fit_curve = None
+            color = f'C{i % 10}'
             if param_idx < 4:
                 values = params[frame_idx, pi, :, param_idx].copy()
             elif param_idx == 4:
@@ -993,6 +995,12 @@ class FitResultWindow(QMainWindow):
                                                np.log(values / ref), np.nan)
                         values[valid] = normed[valid]
                         values[user_masked] = normed[user_masked]
+                        q_fit_all = phase_data.get('strain_fits', {}).get(opts.get('strain_fit'))
+                        if q_fit_all is not None:
+                            qf = q_fit_all[frame_idx, pi, :]
+                            with np.errstate(divide='ignore', invalid='ignore'):
+                                fit_curve = np.where(ref_valid & (ref > 0) & (qf > 0),
+                                                     np.log(qf / ref), np.nan)
                 else:
                     if norm_mode == 'Mean':
                         ref = np.mean(values[valid])
@@ -1010,15 +1018,18 @@ class FitResultWindow(QMainWindow):
             label = f'{phase} peak {pi}'
             if is_polar:
                 theta = np.deg2rad(self.eta_axis)
-                ax.scatter(theta[valid], values[valid], s=10, label=label)
+                ax.scatter(theta[valid], values[valid], s=10, label=label, color=color)
                 if show_masked and np.any(user_masked):
                     ax.scatter(theta[user_masked], values[user_masked],
                                s=10, marker='x', color='gray', alpha=0.4, zorder=1)
             else:
-                ax.scatter(self.eta_axis[valid], values[valid], s=10, label=label)
+                ax.scatter(self.eta_axis[valid], values[valid], s=10, label=label, color=color)
                 if show_masked and np.any(user_masked):
                     ax.scatter(self.eta_axis[user_masked], values[user_masked],
                                s=10, marker='x', color='gray', alpha=0.4, zorder=1)
+            if fit_curve is not None:
+                xs = np.deg2rad(self.eta_axis) if is_polar else self.eta_axis
+                ax.plot(xs, fit_curve, '-', color=color, lw=1.5, zorder=3)
 
         if norm_enabled and norm_mode == 'Frame':
             ref_frame = opts.get('norm_ref_frame')
@@ -1649,6 +1660,12 @@ class WAXSViewer(QMainWindow):
         self._fr_norm_frame.editingFinished.connect(self._on_fit_changed)
         grid.addWidget(self._fr_norm_frame, 2, 1)
 
+        grid.addWidget(QLabel('Strain fit:'), 2, 2)
+        self._fr_fit = QComboBox()
+        self._fr_fit.addItem('None')
+        self._fr_fit.currentTextChanged.connect(self._on_fit_changed)
+        grid.addWidget(self._fr_fit, 2, 3)
+
         layout.addLayout(grid)
 
         # Row 3: X-axis (Eta), Auto, Min, Max
@@ -2099,7 +2116,16 @@ class WAXSViewer(QMainWindow):
 
     def _on_fit_phase_changed(self, phase):
         self._fr_peak.setText('All')
+        self._refresh_strain_fit_combo()
         self._on_fit_changed()
+
+    def _refresh_strain_fit_combo(self):
+        phase = self._fr_phase.currentText()
+        names = list(self._fit_data.get(phase, {}).get('strain_fits', {}))
+        self._fr_fit.blockSignals(True)
+        self._fr_fit.clear()
+        self._fr_fit.addItems(['None'] + names)
+        self._fr_fit.blockSignals(False)
 
     def _step_peak(self, peak_edit, direction, fit_data, phase_combo):
         phase = phase_combo.currentText()
@@ -2277,6 +2303,7 @@ class WAXSViewer(QMainWindow):
             'norm_ref_frame': norm_ref_frame,
             'norm_scaling': float(self._fr_scaling.text() or '1e6'),
             'radial_unit': self._1d_xaxis.currentText(),
+            'strain_fit': self._fr_fit.currentText(),
             **self._mask_dialog.get_filters(),
         }
 
@@ -2702,6 +2729,16 @@ class WAXSViewer(QMainWindow):
                                     'chi2': grp['chi2'][:],
                                     'mask': grp['mask'][:].astype(bool),
                                 }
+                    if 'strain_fit' in fh:
+                        for key, pd_ in self._fit_data.items():
+                            if key not in fh['strain_fit']:
+                                continue
+                            sf = {}
+                            for name, g in fh['strain_fit'][key].items():
+                                if isinstance(g, h5py.Group) and 'q_fit' in g \
+                                        and g['q_fit'].shape == pd_['params'].shape[:3]:
+                                    sf[name] = g['q_fit'][:]
+                            pd_['strain_fits'] = sf
                     if 'fit_results_lineout' in fh:
                         fr = fh['fit_results_lineout']
                         for key in fr:
