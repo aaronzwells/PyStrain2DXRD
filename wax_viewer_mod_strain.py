@@ -721,6 +721,7 @@ class LineoutFitWindow(QMainWindow):
         norm_scaling = opts.get('norm_scaling', 1e6)
         mask_filters = opts.get('filters', [])
         show_masked = opts.get('show_masked', True)
+        fit = phase_data.get('strain_fits', {}).get(opts.get('strain_fit'))
 
         unit = f'x{norm_scaling:.3g}' if norm_enabled else opts.get('radial_unit', '')
         print(f"--- {phase} | {param_name} (lineout) ---")
@@ -926,7 +927,15 @@ class FitResultWindow(QMainWindow):
         norm_scaling = opts.get('norm_scaling', 1e6)
         mask_filters = opts.get('filters', [])
         show_masked = opts.get('show_masked', True)
+        fit = phase_data.get('strain_fits', {}).get(opts.get('strain_fit'))
 
+        if fit is not None:
+            txt = self._strain_text(fit, opts.get('strain_fit'), frame_idx, peak_indices)
+            if txt:
+                ax.text(0.01, 0.01, txt, transform=ax.transAxes, fontsize=7,
+                        family='monospace', va='bottom', ha='left', zorder=5,
+                        bbox=dict(boxstyle='round', fc='white', ec='none', alpha=0.7))
+        
         if norm_enabled and norm_mode == 'Frame':
             unit = 'ln ratio'
         elif norm_enabled:
@@ -995,9 +1004,8 @@ class FitResultWindow(QMainWindow):
                                                np.log(values / ref), np.nan)
                         values[valid] = normed[valid]
                         values[user_masked] = normed[user_masked]
-                        q_fit_all = phase_data.get('strain_fits', {}).get(opts.get('strain_fit'))
-                        if q_fit_all is not None:
-                            qf = q_fit_all[frame_idx, pi, :]
+                        if fit is not None:
+                            qf = fit['q_fit'][frame_idx, pi, :]
                             with np.errstate(divide='ignore', invalid='ignore'):
                                 fit_curve = np.where(ref_valid & (ref > 0) & (qf > 0),
                                                      np.log(qf / ref), np.nan)
@@ -1029,7 +1037,7 @@ class FitResultWindow(QMainWindow):
                                s=10, marker='x', color='gray', alpha=0.4, zorder=1)
             if fit_curve is not None:
                 xs = np.deg2rad(self.eta_axis) if is_polar else self.eta_axis
-                ax.plot(xs, fit_curve, '-', color=color, lw=1.5, zorder=3)
+                ax.plot(xs, fit_curve, '-', color='k', lw=1.5, zorder=3)
 
         if norm_enabled and norm_mode == 'Frame':
             ref_frame = opts.get('norm_ref_frame')
@@ -1076,6 +1084,25 @@ class FitResultWindow(QMainWindow):
         self.canvas.draw()
         self._programmatic_update = False
 
+    def _strain_text(self, fit, name, frame_idx, peak_indices):
+        eps = fit.get('strain')
+        if eps is None:
+            return ''
+        err = fit.get('strain_err', np.full_like(eps, np.nan))
+        labels = ['εxx', 'εxy', 'εyy', 'εxz', 'εyz', 'εzz']
+
+        def fmt(v, e):
+            parts = [f'{l}={x*1e6:.1f}±{s*1e6:.1f}'
+                    for l, x, s in zip(labels, v, e) if np.isfinite(x)]
+            return '  '.join(parts) or 'n/a'
+
+        if eps.ndim == 2:        # joint fit: one tensor per frame
+            body = fmt(eps[frame_idx], err[frame_idx])
+        else:                    # per-peak fit: one tensor per peak
+            body = '\n'.join(f'pk{pi}: ' + fmt(eps[frame_idx, pi], err[frame_idx, pi])
+                            for pi in peak_indices)
+        return f'{name} (µε)\n{body}'
+    
     def _on_xlim_changed(self, ax):
         if self._programmatic_update:
             return
@@ -2737,7 +2764,11 @@ class WAXSViewer(QMainWindow):
                             for name, g in fh['strain_fit'][key].items():
                                 if isinstance(g, h5py.Group) and 'q_fit' in g \
                                         and g['q_fit'].shape == pd_['params'].shape[:3]:
-                                    sf[name] = g['q_fit'][:]
+                                    for name, g in fh['strain_fit'][key].items():  #Allows strain component values to be displayed on chart
+                                        if isinstance(g, h5py.Group) and 'q_fit' in g \
+                                                and g['q_fit'].shape == pd_['params'].shape[:3]:
+                                            sf[name] = {k: g[k][:] for k in ('q_fit', 'strain', 'strain_err')
+                                                        if k in g}
                             pd_['strain_fits'] = sf
                     if 'fit_results_lineout' in fh:
                         fr = fh['fit_results_lineout']

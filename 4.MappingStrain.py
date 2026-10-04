@@ -5,9 +5,9 @@ import time
 
 def map_strain():
     # --- User-Defined Inputs ---
-    json_path = "OutputData/OutputFiles_Data_VB-APS-SSAO-6_25C_2025.10.29-15.09.53/strain_tensor_summary.json"
+    json_path = "2_BinnedIntegrationAndFitting/Feb2025/Feb2025_OnHeat_25C/scan_range_169_520_fit_max10_alumina_3comp_joint_strain_tensor_summary.json"
     sample_name = "VB-APS-SSAO-6_25C"
-    solved_strain_components = 5 # 3 = biaxial; 5 = biaxial w/ shear; 6 = all components
+    solved_strain_components = 3 # 3 = biaxial; 5 = biaxial w/ shear; 6 = all components
     
     # Define the geometric and measurement parameters for mapping
     n_steps_x = 8      # Number of measurement points in the X direction (columns)
