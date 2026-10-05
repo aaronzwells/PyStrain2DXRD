@@ -1,0 +1,5 @@
+python waxs_peakfit_v3.py 2_BinnedIntegrationAndFitting/Feb2025/Feb2025_OnHeat_25C/scan_range_169_520.h5 --config pk_alumina.yaml --output 2_BinnedIntegrationAndFitting/Feb2025/Feb2025_OnHeat_25C/scan_range_169_520_fit_max10Filt.h5
+
+python waxs_fit_strain_append.py 2_BinnedIntegrationAndFitting/Feb2025/Feb2025_OnHeat_25C/scan_range_169_520_fit_max20.h5 --wavelength-nm 0.0172978 --ref-frame 135 --num-comp 3 --phase alumina --joint
+
+python hdf5_to_strain_json.py 2_BinnedIntegrationAndFitting/Feb2025/Feb2025_OnHeat_25C/scan_range_169_520_fit_max20.h5 --phase alumina --group 3comp_joint --n-rows 44 --n-cols 8 --first-index 0

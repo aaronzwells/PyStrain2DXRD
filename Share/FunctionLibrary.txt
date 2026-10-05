@@ -1,0 +1,1955 @@
+from matplotlib import ticker
+import numpy as np
+from scipy.signal import find_peaks, peak_widths
+from scipy.optimize import curve_fit
+from numba import njit
+from skimage import exposure
+import os
+import imageio.v2 as imageio
+import pyFAI, fabio
+import logging
+import json
+
+
+# --- Utility: Removes the extension from a file name
+def remove_filename_extension(path):
+    """
+    Removes the extension and a trailing '.avg' from a filename.
+
+    Args:
+        path (str): The full file path.
+
+    Returns:
+        str: The filename without its extension.
+    """
+    filename = os.path.splitext(os.path.basename(path))[0]
+    return filename.replace(".avg","")
+
+# --- Utility: Creates directory for future output data storage
+def create_directory(path, logger=None):
+    """
+    Creates a directory if it does not already exist.
+
+    Args:
+        path (str): The directory path to create.
+        logger (logging.Logger, optional): Logger for status messages. Defaults to None.
+    """
+    logger = logger or logging.getLogger(__name__)
+    try:
+        os.makedirs(path, exist_ok=True)
+        logger.info(f"Directory created: {path}")
+    except Exception as e:
+        logger.warning(f"Error creating directory: {e}")
+    return path
+
+def print_mask(mask, output_path):
+    """
+    Utility function to visualize a mask as an image.
+
+    Args:
+        mask (np.ndarray): A 2D boolean array where True values indicate masked pixels.
+        output_path (str): The directory path to save the mask visualization.
+    """
+    path = f"{output_path}"
+    mask = (mask * 255).astype(np.uint8)
+    imageio.imwrite(path, mask)
+
+# --- Utility: Fit pseudo-Voigt to peaks in a .int file ------------------
+# .int file is generated as from an ideal alumina (corundum) crystal structure
+# from materialsproject.org database (mp-1143) and Vesta to simulate the structure
+def fit_peak_centroids(x_data, y_data, height_frac=0.1, distance=20, eta0=0.5, delta_tol=0.1, logger=None):
+    """
+    Fits pseudo-Voigt profiles to detect peak centroids from 1D XRD data.
+
+    This function first identifies peaks in the intensity data, then fits a
+    pseudo-Voigt profile to each peak within a small window to accurately
+    determine its centroid position.
+
+    Args:
+        x_data (np.ndarray): The dispersive axis data (e.g., q or 2-theta).
+        y_data (np.ndarray): The intensity data.
+        height_frac (float, optional): Minimum peak height as a fraction of the
+            maximum intensity. Defaults to 0.1.
+        distance (int, optional): Minimum horizontal distance (in data points)
+            between neighboring peaks. Defaults to 20.
+        eta0 (float, optional): Initial guess for the eta (mixing) parameter of
+            the pseudo-Voigt profile. Defaults to 0.5.
+        delta_tol (float, optional): Tolerance for the peak center during fitting,
+            defining the bounds relative to the initial guess. Defaults to 0.1.
+        logger (logging.Logger, optional): Logger for status messages. Defaults to None.
+
+    Returns:
+        peak_positions (list): List of fitted centroid positions in the units of x_data.
+    """
+    logger = logger or logging.getLogger(__name__)
+
+    x = x_data
+    y = y_data
+
+    # Find initial peak locations using scipy's find_peaks
+    peaks, _ = find_peaks(y, height=np.max(y) * height_frac, distance=distance)
+    if len(peaks) == 0:
+        logger.warning("No peaks found in the provided data.")
+        return [] # Return an empty list if no peaks are found
+
+    dq = x[1] - x[0]  # Calculate the step size of the x-axis
+    # Estimate peak widths (FWHM) in terms of x-axis units
+    widths_bins = peak_widths(y, peaks, rel_height=0.5)[0]
+    widths_x = widths_bins * dq
+
+    peak_positions = []
+    for idx, wid in zip(peaks, widths_x):
+        x0 = x[idx]  # Initial guess for peak center
+        # Define a fitting window around the peak
+        half_width = max(2, int(np.ceil(wid / dq)))
+        sl = slice(max(0, idx - half_width), min(len(x), idx + half_width + 1))
+        try:
+            # Set up initial parameters and bounds for the curve fit
+            p0 = [y[idx], x0, wid, eta0]
+            # Bounds need to match the number of parameters in the function being fit.
+            # Since the original call didn't account for background, we fix it at 0.
+            bounds = ([0, x0 - delta_tol, 0, 0], [np.inf, x0 + delta_tol, np.inf, 1])
+            popt, _ = curve_fit(pseudo_voigt, x[sl], y[sl], p0=p0, bounds=bounds)
+            peak_positions.append(popt[1])  # Append the fitted centroid (popt[1])
+        except Exception:
+            logger.exception(f"Fit failed at index {idx} with x0={x0:.2f}")
+            continue
+    
+    # The hardcoded file writing has been removed.
+    # The function now only calculates and returns the peak positions.
+    return peak_positions
+
+def fit_peak_centroids_binned(x_data, y_data, q_min, q_max, height_frac=0.1, distance=20, eta0=0.5, delta_tol=0.1, logger=None):
+    """
+    A wrapper function to fit peak centroids for binned data. This is to support an analysis similar to script 1 but for binned data.
+    To look for bad fits around the azimuth (e.g., near Pilatus dead zones)
+
+    This function is designed to handle cases where the input data is already
+    binned (e.g., from a 2D integration) and applies the same peak fitting
+    logic as `fit_peak_centroids` to each bin.
+
+    Args:
+        x_data (np.ndarray): The dispersive axis data (e.g., q or 2-theta).
+        y_data (np.ndarray): The intensity data, expected to be 2D with shape (n_bins, n_points).
+        q_min (float): Minimum q value for the fitting range.
+        q_max (float): Maximum q value for the fitting range.
+        height_frac (float, optional): Minimum peak height as a fraction of the
+            maximum intensity. Defaults to 0.1.
+        distance (int, optional): Minimum horizontal distance (in data points)
+            between neighboring peaks. Defaults to 20.
+        eta0 (float, optional): Initial guess for the eta (mixing) parameter of
+            the pseudo-Voigt profile. Defaults to 0.5.
+        delta_tol (float, optional): Tolerance for the peak center during fitting,
+            defining the bounds relative to the initial guess. Defaults to 0.1.
+        logger (logging.Logger, optional): Logger for status messages. Defaults to None.
+
+    Returns:
+        list: A list of lists containing fitted centroid positions for each bin.
+    """
+    logger = logger or logging.getLogger(__name__)
+    n_bins = y_data.shape[0] 
+    max_num_peaks = 8             # Rigid column limit
+
+    all_peak_positions = np.full((n_bins, max_num_peaks), np.nan)
+    # Iterate through each azimuthal bin to perform peak fitting
+    for i in range(n_bins):
+        x_data_trimmed = x_data[(x_data >= q_min) & (x_data <= q_max)] #protect integrity of peak ID by trimming high background region
+        y_data_trimmed_bin = y_data[i][(x_data >= q_min) & (x_data <= q_max)]
+        peaks = fit_peak_centroids(x_data_trimmed, y_data_trimmed_bin, height_frac, distance, eta0, delta_tol, logger)
+        peaks_list = list(peaks)
+        
+        # Truncate if it exceeds 8 peaks to protect array boundaries
+        # If peaks_list has fewer than 8 items, the remaining slots stay np.nan
+        if len(peaks_list) > max_num_peaks:
+            peaks_list = peaks_list[:max_num_peaks]
+
+        all_peak_positions[i, :len(peaks_list)] = peaks_list
+    
+    all_peak_positions = np.array(all_peak_positions)
+    return all_peak_positions
+
+# --- Utility: Convert 2theta from initial fit check into q-space
+def convert_2theta_to_q(file_path, wavelength_nm):
+    """
+    Converts 2θ values from a text file to q values.
+
+    Args:
+        file_path (str): Path to the text file containing 2θ values (in degrees).
+        wavelength_nm (float): Wavelength in nanometers.
+
+    Returns:
+        np.ndarray: Array of q values in nm⁻¹.
+    """
+    # Load the 2θ values (assuming one per line)
+    twotheta_deg = np.loadtxt(file_path)
+    
+    # Convert 2θ to θ in radians
+    theta_rad = np.deg2rad(twotheta_deg / 2.0)
+    
+    # Calculate q
+    q_vals = (4 * np.pi / wavelength_nm) * np.sin(theta_rad)
+    
+    return q_vals
+
+# --- ImageJ-based autocontrast function ---------------------------------
+def imagej_autocontrast(image, k=3.0):
+    """
+    USE WITH EXTREME CAUTION. 
+    This function modifies the image data directly.
+    Outputs are ONLY appropriate for visualization purposes, i.e., a figure of the 2D pattern.
+    Outputs cannot serve as data to be integrated, either 1D or 2D, without risking severe peak truncation. 
+
+    Adjusts the image contrast based on its statistics, similar to ImageJ's auto-contrast.
+
+    The display range is set to `mean ± k * std_dev`.
+
+    Args:
+        image (np.ndarray): The input image.
+        k (float, optional): The number of standard deviations to include in the display range. Defaults to 2.5.
+    Returns:
+        np.ndarray: The contrast-adjusted image, rescaled to the new range.
+    """
+    mean = np.mean(image)
+    std = np.std(image)
+    vmin = mean - k * std
+    vmax = mean + k * std
+    return exposure.rescale_intensity(image, in_range=(vmin, vmax))
+
+# --- Pseudo-Voigt profile -----------------------------------------------
+@njit(cache=True)
+def pseudo_voigt(x, amp, cen, wid, eta): # bg_slope , bg_const=0.0
+    """
+    A pseudo-Voigt profile, which is a linear combination of Gaussian and Lorentzian profiles.
+
+    The profile is defined as: V(x) = η * L(x) + (1-η) * G(x), where 0 < η < 1.
+    The `@njit` decorator from Numba is used for just-in-time compilation to speed up computation.
+
+    Args:
+        x (np.ndarray): The independent variable (e.g., q or 2-theta).
+        amp (float): The amplitude of the peak.
+        cen (float): The center of the peak.
+        wid (float): The full width at half maximum (FWHM) of the peak.
+        eta (float): The mixing parameter between Gaussian (0) and Lorentzian (1).
+        bg_const (float, optional): Constant (y-intercept) of the background. Defaults to 0.0.
+        # bg_slope (float): Slope of the background.
+
+    Returns:
+        np.ndarray: The calculated pseudo-Voigt profile.
+    """
+    sigma = wid / (2 * np.sqrt(2 * np.log(2)))
+    gamma = wid / 2
+    gauss   = amp * np.exp(-((x - cen) ** 2) / (2 * sigma ** 2))
+    lorentz = amp * (gamma ** 2) / ((x - cen) ** 2 + gamma ** 2)
+    return eta * lorentz + (1 - eta) * gauss
+
+# --- PyFAI data loading & integration -----------------------------------
+def load_integrator_and_data(poni_path, tif_path, output_path, detector_type, mask_file=None, ref_tif_path=None, mask_threshold=4e2, logger=None, save_adjusted_tif=True, autocontrast_sensitivity=1.5):
+    """
+    Load/initialize PyFAI integrator and adjust a 2D XRD image using an auto-CB 
+    scheme from ImageJ. Saves the adjusted image.
+
+    Note: The `ref_tif_path` and `mask_threshold` arguments are currently unused.
+    The function returns `None` for the mask.
+
+    Args:
+        poni_path (str): Path to the pyFAI calibration file (.poni).
+        tif_path (str): Path to the input TIFF image.
+        output_path (str): Directory to save the adjusted image.
+        detector_type (str): Type of detector ("Pilatus" or "GE").
+        mask_file (str, optional): Path to an external mask file (e.g., .tif, .npy). 
+                                   In the mask file, 0 or False = GOOD (unmasked), 1 or True = BAD (masked).
+        ref_tif_path (str, optional): Unused. Defaults to None.
+        mask_threshold (float, optional): Unused. Defaults to 4e2.
+        logger (logging.Logger, optional): Logger for status messages. Defaults to None.
+
+    Returns:
+        tuple: A tuple containing (ai, unaltered_image_data, mask), where `ai` is the AzimuthalIntegrator,
+               `unaltered_image_data` is the unaltered image data (CRITICAL TO REMAIN UNALTERED), and `mask` is the 
+               boolean mask array (True = masked/bad).
+    """
+    logger = logger or logging.getLogger(__name__)    
+    
+    # Load calibrant and raw image
+    ai  = pyFAI.load(poni_path)
+    img = fabio.open(tif_path).data
+    img = np.flipud(img) if detector_type == "Pilatus" else img # CRITICAL: Flip the image vertically for Pilatus - MATCHES Oct. 25 CALIBRATION
+    unaltered_image_data = img.astype(np.float32) # Emphasize the image data must remain unaltered before binned integration. 
+
+    # Contrast adjustment using ImageJ-style autocontrast (wider dynamic range). FOR VISUALIZATION ONLY. 
+    data_adj = imagej_autocontrast(unaltered_image_data, k=autocontrast_sensitivity)
+
+    if save_adjusted_tif:
+        # Save adjusted TIF of the 2D pattern alongside the original
+        base, ext = os.path.splitext(tif_path)
+        filename = os.path.basename(base)
+        adjusted_path = f"{output_path}/{filename}_adjusted{ext}"
+        imageio.imwrite(adjusted_path, data_adj) # This is the ONLY place it is okay to use data_adj. ONLY for saving the adjusted image. 
+        logger.info(f"Adjusted image saved to: {adjusted_path}")
+    else:
+        logger.info(f"Adjusted image not saved.")
+
+    # --- Masking Logic ---
+    final_mask = None
+
+    # 1. Load external mask file
+    if mask_file and os.path.exists(mask_file):
+        try:
+            mask_data = fabio.open(mask_file).data
+            # Standard mask file convention: 1 = bad pixel, 0 = good pixel.
+            # pyFAI mask convention: True = bad pixel, False = good pixel.
+            final_mask = (mask_data == 1)
+            # CRITICAL: Flip the mask vertically for Pilatus - MATCHES Oct. 25 CALIBRATION. Only flip in this block, i.e., if there is file provided
+            final_mask = np.flipud(final_mask) if detector_type == "Pilatus" else final_mask 
+            logger.info(f"Successfully loaded external mask from: {mask_file}")
+        except Exception as e:
+            logger.warning(f"Failed to load mask file {mask_file}: {e}. No external mask applied.")
+
+    # 2. Apply threshold mask (hot pixels)
+    if mask_threshold is not None:
+        # Mask pixels *below* the threshold
+        threshold_mask = unaltered_image_data > mask_threshold  #When revisiting GE-detector data, may want to verify this is not causing undue truncation.
+        logger.info(f"Generated threshold mask for intensity < {mask_threshold}")
+        
+        if final_mask is not None:
+            # Combine masks (pixel is bad if in *either* mask)
+            final_mask = final_mask | threshold_mask
+            logger.info("Combined external mask and threshold mask.")
+        else:
+            final_mask = threshold_mask
+    
+    if final_mask is None:
+        logger.info("No mask was applied.")
+
+    return ai, unaltered_image_data, final_mask #CRITICAL: return unaltered image data
+
+def load_and_prep_image(tif_path, output_path, detector_type, mask_file=None, mask_threshold=4e2, logger=None, save_adjusted_tif=True, autocontrast_sensitivity = 3.0):
+    """
+    Loads and prepares a single TIFF image for integration.
+
+    This function is designed for batch processing where the pyFAI integrator
+    is already loaded. It performs contrast adjustment and saves the adjusted image.   #BS: This explains the difference
+
+    Args:
+        tif_path (str): Path to the input TIFF image.
+        output_path (str): Directory to save the adjusted image.
+        detector_type (str): Type of detector ("Pilatus" or "GE").
+        mask_file (str, optional): Path to an external mask file (e.g., .tif, .npy). 
+                                   In the mask file, 0 or False = GOOD (unmasked), 1 or True = BAD (masked).
+        mask_threshold (float, optional): Unused. Defaults to 4e2.
+        logger (logging.Logger, optional): Logger for status messages. Defaults to None.
+
+    Returns:
+        tuple: A tuple containing (unaltered_image_data, mask), where `unaltered_image_data` is the
+               original image data (AGAIN, CRITICAL TO REMAIN UNALTERED), and `mask` is the boolean mask array
+               (True = masked/bad).
+    """
+    logger = logger or logging.getLogger(__name__)
+
+    # Load and process the image data
+    img = fabio.open(tif_path)
+    img = np.flipud(img) if detector_type == "Pilatus" else img # CRITICAL: Flip the image vertically for Pilatus - MATCHES Oct. 25 CALIBRATION
+    unaltered_image_data = img.data.astype(np.float32) # Emphasize the image data must remain unaltered before binned integration. 
+
+    # Contrast adjustment using ImageJ-style autocontrast (wider dynamic range). FOR VISUALIZATION ONLY. 
+    data_adj = imagej_autocontrast(unaltered_image_data, k=autocontrast_sensitivity)
+
+    if save_adjusted_tif:
+        # Save the adjusted image
+        base, ext = os.path.splitext(tif_path)
+        filename = os.path.basename(base)
+        adjusted_path = f"{output_path}/{filename}_adjusted{ext}"
+        imageio.imwrite(adjusted_path, data_adj) # This is the ONLY place it is okay to use data_adj. ONLY for saving the adjusted image.
+        logger.info(f"Adjusted image saved to: {adjusted_path}")
+    else: 
+        logger.info(f"Adjusted image not saved.")
+
+    # --- Masking Logic ---
+    final_mask = None
+
+    # 1. Load external mask file
+    if mask_file and os.path.exists(mask_file):
+        try:
+            mask_data = fabio.open(mask_file).data
+            # Standard mask file convention: 1 = bad, 0 = good.
+            # pyFAI mask convention: True = bad, False = good.
+            final_mask = (mask_data == 1) 
+            # CRITICAL: Flip the mask vertically for Pilatus - MATCHES Oct. 25 CALIBRATION. Only flip in this block, i.e., if there is file provided
+            final_mask = np.flipud(final_mask) if detector_type == "Pilatus" else final_mask 
+            logger.info(f"Successfully loaded external mask from: {mask_file}")
+        except Exception as e:
+            logger.warning(f"Failed to load mask file {mask_file}: {e}. No external mask applied.")
+
+    # 2. Apply threshold mask (hot pixels)
+    if mask_threshold is not None:
+        # Mask pixels *above* the threshold
+        threshold_mask = unaltered_image_data < mask_threshold
+        logger.info(f"Generated threshold mask for intensity > {mask_threshold}")
+        
+        if final_mask is not None:
+            # Combine masks (pixel is bad if in *either* mask)
+            final_mask = final_mask | threshold_mask
+            logger.info("Combined external mask and threshold mask.")
+        else:
+            final_mask = threshold_mask
+    
+    if final_mask is None:
+        logger.info("No mask was applied.")
+
+    return unaltered_image_data, final_mask   #CRITICAL: return unaltered image data
+
+def integrate_2d(ai, data, detector_type, mask, num_azim_bins=360, q_min=16.0, npt_rad=5000, output_dir=None, save_chi_files=False, save_txt_for_fityk=False, logger=None):
+    """
+    Integrates a 2D diffraction pattern into a 2D (q, chi) representation.
+
+    Optionally saves each azimuthal slice as a .chi file (Fit2D format).
+
+    Args:
+        ai (pyFAI.AzimuthalIntegrator): The pyFAI integrator object.
+        data (np.ndarray): The 2D diffraction image data.
+        mask (np.ndarray): A mask for invalid pixels.
+        num_azim_bins (int, optional): Number of azimuthal bins. Defaults to 360.
+        q_min (float, optional): Minimum q value for integration. Defaults to 16.0.
+        npt_rad (int, optional): Number of points in the radial dimension. Defaults to 5000.
+        output_dir (str, optional): Directory to save .chi files. Defaults to None.
+        save_chi_files (bool, optional): If True, save .chi files. Defaults to False.
+        logger (logging.Logger, optional): Logger for status messages. Defaults to None.
+
+    Returns:
+        tuple: A tuple containing (I2d, q, chi), where `I2d` is the 2D integrated
+               intensity array, `q` is the radial q-values, and `chi` is the
+               azimuthal chi-values in degrees.
+    """
+    if save_chi_files:
+        os.makedirs(output_dir+"/ChiFiles", exist_ok=True)
+
+    if save_txt_for_fityk:
+        os.makedirs(output_dir+"/Fityk", exist_ok=True)
+
+    logger = logger or logging.getLogger(__name__)
+    logger.info("Running the integrate_2d() function")
+    # Determine q_max from low-res integration
+    q_full = ai.integrate2d(data, npt_rad, 1, unit="q_nm^-1").radial
+    q_max = q_full[-1]
+
+    #Cannot get integrate2d to apply the mask as NaNs with Pilatus (it will only do zeros, I've tried so many things)
+    #This should force application to NaNs safely.
+    #Adding an "if detector_type == 'Pilatus'" to make safer, I think
+    if mask is not None:
+        data_masked = np.where(mask, np.nan, data)
+    else:
+        data_masked = data
+
+    # Perform the high-resolution  2D integration
+    res = ai.integrate2d(
+        data_masked.astype(np.float32), # Ensure data is float for integration, especially important if there are NaNs from masking
+        npt_rad=npt_rad,
+        npt_azim=num_azim_bins,
+        unit="q_nm^-1",
+        #mask=mask,
+        #mask = np.ones_like(data, dtype=np.uint8), #Dummy mask to test if applying at all
+        #method="lut", #Tried this to see if it would get mask to apply
+        dummy = np.nan, #Ensures masked pixels are not contributing to the integrated intensity. Confirmed this is working as intended by testing with a dummy mask of all ones (i.e., all pixels masked) and confirming the output is all NaNs.
+        radial_range=(q_min, q_max),
+    )
+    I2d = res.intensity
+    q, chi = res.radial, res.azimuthal
+
+    # Ensure I2d has shape (n_azim, n_rad)
+    if I2d.shape == (len(q), len(chi)):
+        I2d = I2d.T
+
+    # Normalize chi to the range [0, 360) and sort the data accordingly
+    chi = (chi + 360) % 360 #confirmed this is starting from east
+    order = np.argsort(chi)
+    chi = chi[order]
+    I2d = I2d[order]
+
+    # Save each azimuthal bin's pattern as a .chi file
+    if save_chi_files:
+        for i, chi_val in enumerate(chi):
+            chi_deg = chi_val
+            filename = os.path.join(output_dir+"/ChiFiles", f"mid_azim_{chi_deg:.1f}deg.chi")
+            with open(filename, 'w') as f:
+                f.write(f"# Azimuthal bin: {chi_deg:.2f} deg\n")
+                f.write("# Columns: q (nm^-1), Intensity (a.u.)\n")
+                for q_val, I_val in zip(q, I2d[i]):
+                    f.write(f"{q_val:.6f} {I_val:.6f}\n")
+
+    # Save a clean .txt file in a separate folder for Fityk scripting, to compare to Aaron's fitting code
+    if save_txt_for_fityk:
+        for i, chi_val in enumerate(chi):
+            chi_deg = chi_val
+            filename = os.path.join(output_dir+"/Fityk", f"mid_azim_{chi_deg:.1f}deg.txt")
+            with open(filename, 'w') as f:
+                for q_val, I_val in zip(q, I2d[i]):
+                    f.write(f"{q_val:.6f} {I_val:.6f}\n")
+
+    # Moved these out of "if" block. Saving q vs chi plot for every pattern is a good idea.
+    fig_filename = os.path.join(output_dir, "q_vs_chi_plot.png")
+    logger.info(f"Stacked q vs chi plot saved to: {fig_filename}")
+    
+    return I2d, q, chi
+
+def plot_binned_patterns_from_2d_integration(I2d, q, chi, output_dir=None, logger=None):
+    """
+    Plots the binned patterns from the 2D integration results for examination.
+
+    Args:
+        I2d (np.ndarray): 2D array of intensities [azimuthal_bin x radial_bin].
+        q (np.ndarray): 1D array of radial q values.
+        chi (np.ndarray): 1D array of azimuthal chi values.
+        output_dir (str, optional): Directory to save the plots. Defaults to None.
+        logger (logging.Logger, optional): Logger for status messages. Defaults to None.
+    """
+    import matplotlib.pyplot as plt
+    logger = logger or logging.getLogger(__name__)
+
+    os.makedirs(output_dir+"/BinnedIntensityPlot", exist_ok=True)
+
+    for i, chi_val in enumerate(chi):
+        plt.figure(figsize=(5, 3))
+        plt.plot(q, I2d[i], label=f"Chi = {chi_val:.1f} deg", linewidth = 1.0, color = 'k')
+        plt.xlabel("q (nm^-1)")
+        plt.ylabel("Intensity (a.u.)")
+        plt.title(f"Binned Pattern at Chi = {chi_val:.1f} deg")
+        #plt.legend()
+        ax = plt.gca()
+        ax.xaxis.set_major_locator(ticker.MultipleLocator(10))
+        ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(5))
+        ax.set_xlim(10,90)
+        if output_dir:
+            plt.savefig(os.path.join(output_dir+"/BinnedIntensityPlot", f"binned_pattern_chi_{chi_val:.1f}.png"), dpi=300, bbox_inches='tight')
+        plt.close()
+
+    logger.info(f"Plotted binned patterns for {len(chi)} bins. Plots saved to: {output_dir+"/BinnedIntensityPlot"}")
+
+def fit_peaks_with_initial_guesses(I2d, chi, q, q_peaks, delta_tol=0.07, eta0=0.5, n_jobs=-1, delta_array=None, output_dir=None, logger=None):
+    """
+    Fits each azimuthal slice of I2d using initial q peak guesses and the pseudo-Voigt function.
+    This function uses parallel processing to speed up the fitting process.
+
+    Args:
+        I2d (np.ndarray): 2D array of intensities [azimuthal_bin x radial_bin]. (i.e., a series of 1D patterns at each azimuth. NOT 2D .tif data)
+        q (np.ndarray): 1D array of radial q values.
+        q_peaks (list or np.ndarray): Initial guesses for peak positions (q0).
+        delta_tol (float, optional): Symmetric tolerance for the fit window around q0. Defaults to 0.07.
+        eta0 (float, optional): Initial guess for the pseudo-Voigt mixing parameter. Defaults to 0.5.
+        n_jobs (int, optional): Number of parallel jobs for fitting. -1 uses all available cores. Defaults to -1.
+        delta_array (np.ndarray, optional): Asymmetric tolerance array of shape (2, N_peaks).
+                                           `delta_array[0]` is upper tolerance, `delta_array[1]` is lower.
+                                           Overrides `delta_tol`. Defaults to None.
+        output_dir (str, optional): Directory to save fitted data. Defaults to None.
+        logger (logging.Logger, optional): Logger for status messages. Defaults to None.
+
+    Returns:
+        tuple: A tuple containing (q_centroids, q_errors, q_chi_path), where `q_centroids`
+               is an array of fitted centroid positions, `q_errors` is an array of their
+               standard errors, and `q_chi_path` is the path to the saved centroid data file.
+    """
+    from joblib import Parallel, delayed
+    logger = logger or logging.getLogger(__name__)
+
+    dq = q[1] - q[0]
+    widths_q = np.full_like(q_peaks, dq * 3)  # reasonable initial width
+    # print(delta_array)
+    # Define a helper function to fit a single azimuthal slice
+    def _fit_slice_w_guesses(intensity_row):
+        centroids_out = []
+        errors_out = []
+        for i, (q0, wid0) in enumerate(zip(q_peaks, widths_q)):
+            # Set fit window tolerance (symmetric or asymmetric)
+            if delta_array is not None:
+                tol_up, tol_dn = delta_array[0][i], delta_array[1][i]
+            else:
+                tol_up = tol_dn = delta_tol
+
+            mask = (q >= q0 - tol_dn) & (q <= q0 + tol_up)
+            x, y = q[mask], intensity_row[mask]
+            
+            # Skip if there's not enough data to fit
+            if len(x) < 5 or not np.any(y > 0):
+                centroids_out.append(np.nan)
+                errors_out.append(np.nan)
+                continue
+
+  
+            try:
+                # Perform the curve fit
+                # bg_const_guess = np.min(y) # Guess the background is at the minimum intensity in the window
+                # p0 = [np.max(y) - bg_const_guess, q0, wid0, eta0, bg_const_guess]
+                p0 = [np.max(y), q0, wid0, eta0] #The pseudo voigt parameters
+                bounds = ([-np.inf, q0 - tol_dn, 0, 0], 
+                          [np.inf, q0 + tol_up, np.inf, 1])
+                
+                popt, pcov = curve_fit(pseudo_voigt, x, y, p0=p0, bounds=bounds) #These are the pseudo voigt parameters, optimized
+                
+                # Extract fitted parameters and their standard errors
+                perr = np.sqrt(np.diag(pcov))
+                fitted_q = popt[1]
+                fitted_q_error = perr[1] # Error of the centroid parameter
+                
+                edge_buffer = 0
+                # Reject fits that are at the edge of the fit window
+                if not (q0 - tol_dn + edge_buffer <= fitted_q <= q0 + tol_up - edge_buffer):
+                    centroids_out.append(np.nan)
+                    errors_out.append(np.nan)
+                else:
+                    centroids_out.append(fitted_q)
+                    errors_out.append(fitted_q_error)
+
+            except (RuntimeError, ValueError): # Catch fitting errors
+                logger.debug(f"Fit failed for peak index {i} in azimuthal bin.")
+                centroids_out.append(np.nan)
+                errors_out.append(np.nan)
+
+        return centroids_out, errors_out
+
+    # Run the fitting in parallel for all azimuthal slices
+    results = Parallel(n_jobs=n_jobs)(
+        delayed(_fit_slice_w_guesses)(row) for row in I2d
+    )
+    
+    q_centroids_list, q_errors_list = zip(*results)
+
+    #BS 7/17/26: Reformatted the q_vs_chi_peaks.txt and q_vs_chi_errors.txt outputs for better readability
+    chi = (chi + 360) % 360 #confirmed this is starting from east
+    q_centroids_arr = np.array(q_centroids_list).T #Keep the transpose for returned arrays b/c of Aaron's subsequent formatting
+    q_errors_arr = np.array(q_errors_list).T
+
+    bin_labeled_centroids = np.column_stack((chi, q_centroids_arr.T)) #Un-transpose for data readability
+    bin_labeled_errors = np.column_stack((chi, q_errors_arr.T))
+    num_peaks = q_centroids_arr.shape[0]
+    peak_headers = "\t".join([f"Peak_{i+1}" for i in range(num_peaks)])
+
+    headers_with_bin_label = f"Chi_Azimuth_(deg)\t{peak_headers}"
+    header_errors = f"Chi_Azimuth_(deg)\t{peak_headers}"
+
+    # Save the results to text files if an output directory is provided
+    if output_dir is not None:
+        q_chi_path = os.path.join(output_dir, "q_vs_chi_peaks.txt")
+        q_err_path = os.path.join(output_dir, "q_vs_chi_errors.txt")
+
+        np.savetxt(q_chi_path, bin_labeled_centroids, fmt="%.6f", delimiter="\t", header=headers_with_bin_label)
+        np.savetxt(q_err_path, bin_labeled_errors, fmt="%.6f", delimiter="\t", header=header_errors)
+        
+        logger.info(f"q vs chi centroid data saved to: {q_chi_path}")
+        logger.info(f"q vs chi error data saved to: {q_err_path}")
+    else:
+        logger.warning("No output directory provided! q vs chi data was not saved!")
+
+    return q_centroids_arr, q_errors_arr, q_chi_path  #Keeping the output arrays in the transposed format for downstream processing
+
+#BS 7/17/26: Adding functions to fit peaks with Fityk
+
+def write_fityk_script(script_name, fityk_input_pfx, chi, center_guesses, tol_up, tol_down, bkg_spline = None, min_q=14, max_q=92, logger = None):
+    """
+    Generates a Fityk script for fitting peaks.
+    Single peak fityk command example:
+        # Load a blank session: 
+            reset
+        # Load the file:
+            @+ <'/Users/benjaminschneiderman/Library/CloudStorage/OneDrive-ColoradoSchoolofMines/Code/Python/Analysis_pyFAI-1/ValidationOutputFiles/VB-APS-SSAO-6_25C_TestMap-AO_000492/BinnedOutput/Fityk/mid_azim_19.5deg.txt'
+        # Trim the background: 
+            %bg0 = Spline(15.98,36.81, 19.66,20.96, 23.68,15.15, 28.26,11.62, 43.09,9.33, 48.74,9.16, 54.32,5.46, 57.1,2.47, 61.2,0.88)
+            Y = y - %bg0(x)
+        # Set the a range for fitting
+            A = a and not (18.5 < x and x < 92) #Restrict range to single peak
+            A = a and not (14 < x and x < 17.5)
+        # Fit exactly one peak to the range (the new locking logic prevents double fits)
+            guess PseudoVoigt
+            fit
+        # LOCK the peak parameters so they can never change again
+        # Numbering starts from the number of spline parameters in your background plus one
+        # Four parameters per peak are, in order, intensity, center, hwhm, PV shape param.  
+            $_19 = {$_19} 
+            $_20 = {$_20}
+            $_21 = {$_21}
+            $_22 = {$_22}
+        # Reactivate datapoints before setting the range for the next peak
+            A = a or (12.7 < x and x < 87.17)
+        # @0: info peaks > ‘/Users/benjaminschneiderman/Library/CloudStorage/OneDrive-ColoradoSchoolofMines/Code/Python/Analysis_pyFAI-1/ValidationOutputFiles/ceria_900mm_linkam_30C_att000_0006092/BinnedOutput/Fityk/mid_azim_43.5deg.peaks’
+    
+    Args:
+        fityk_input_pfx (str): Prefix path for the Fityk input files.
+        chi (list): List of azimuthal angles (in degrees). Could be used for a series of unbinned patterns too. 
+        center_guesses (list): List of initial center guesses for the peaks.
+        tol_up (float): Upper tolerance for the fitting (peak-specific list).
+        tol_down (float): Lower tolerance for the fitting (peak-specific list).
+        bkg_spline (list): Background spline parameters, formatted as (x0, y0, x1, y1, ...).
+        min_q (float): Minimum global q-value for the fitting range.
+        max_q (float): Maximum global q-value for the fitting range.
+
+    """
+    import os
+    logger = logger or logging.getLogger(__name__)
+
+    fityk_script = ""  #Initialize blank string
+    for bin in range(len(chi)): #(This can be changed to a variable name for unbinned, fully integrated patterns in series)
+        fityk_script += f"""
+        reset
+        @+ <'{fityk_input_pfx}{chi[bin]}deg.txt'"""
+        if bkg_spline is not None:
+            fityk_script += f"""
+            %bg0 = Spline({','.join(map(str, bkg_spline))})
+            Y = y - %bg0(x)"""
+
+        for peak in range(len(center_guesses)):
+            # 'and not' statement restricts x range to a single peak
+            # fit exactly one PV peak to each x range
+            # 'or' statements re-activate all the points so you can move to the next peak AFTER LOCKING
+            fityk_script += f"""
+            A = a and not ({min_q} < x and x < {center_guesses[peak] - tol_down[peak]})
+            A = a and not ({center_guesses[peak] + tol_up[peak]} < x and x < {max_q})
+            guess PseudoVoigt
+            fit
+            $_{len(bkg_spline)+4*peak+1} = {{$_{len(bkg_spline)+4*peak+1}}}
+            $_{len(bkg_spline)+4*peak+2} = {{$_{len(bkg_spline)+4*peak+2}}}
+            $_{len(bkg_spline)+4*peak+3} = {{$_{len(bkg_spline)+4*peak+3}}}
+            $_{len(bkg_spline)+4*peak+4} = {{$_{len(bkg_spline)+4*peak+4}}}
+            A = a or ({min_q} < x and x < {center_guesses[peak] - tol_down[peak]})
+            A = a or ({center_guesses[peak] + tol_up[peak]} < x and x < {max_q})"""
+
+        #Old: write a separate .peaks file
+        # fityk_script += f"""
+        # @0: info peaks > '{fityk_input_pfx}{chi[bin]}deg.peaks'""" 
+
+        #New: use lua to keep running file of peak centers for less i/o burden
+
+        running_file_name = fityk_input_pfx[:-9]+"peak_centers.txt" #trims mid_azim_ and writes file in the Fityk folder
+        fityk_script += f"""
+        lua f = io.open("{running_file_name}", "a"); funcs = F:get_components(0); for i=0,#funcs-1 do f:write(funcs[i]:get_param_value("center") .. "\\n") end; f:close()"""
+
+    script_name_full = os.path.join(os.getcwd(), "fitykScripts", script_name)
+    with open(script_name_full, "w") as f:
+        f.write(fityk_script)
+    #logger.info(f"Fityk script written to: {script_name}")
+
+def fit_peaks_with_fityk(scanid, sample_name, chi, bkg_spline, initial_q_guesses, tol_up, tol_down, logger = None):
+    #This would be a place to call fityk programmatically, if we get to that point
+    
+    scan_name = f"{sample_name}_{scanid:06d}"
+    fityk_input_pfx = os.path.join(os.getcwd(), "2_BinnedIntegrationAndFitting", scan_name, "BinnedOutput/Fityk/mid_azim_")
+    
+    script_name = f"fityk_script_scanid_{scanid}_bins_all.fit"
+    write_fityk_script(script_name, fityk_input_pfx, chi, initial_q_guesses, tol_up, tol_down, bkg_spline=bkg_spline)
+    script_name_full = os.path.join(os.getcwd(), "fitykScripts", script_name)
+
+    import subprocess
+    fityk_bin = "/Applications/Fityk 2.app/Contents/MacOS/fityk"
+     # Pass the script file path directly as the last argument
+    subprocess.run([fityk_bin, script_name_full])
+    
+
+def format_fityk_outputs(scanid, sample_name, chi, num_peaks, output_dir = None, logger = None):
+    """
+    Reads the single peak_centers file and reshape the peak center data into a convenient array like Aaron's
+
+    Args:
+        scan id: unique scan identifying number
+        sample_name: filename given at APS
+        chi (list): List of azimuthal angles (in degrees).
+
+    Returns:
+        outputs a file formatted like Aaron's q_vs_chi_peaks.txt (with new formatting)
+    """
+    logger = logger or logging.getLogger(__name__)
+
+    q_centroids_list = []
+    #q_errors_list = []
+
+    scan_name = f"{sample_name}_{scanid:06d}"
+    peak_centers_file= os.path.join(os.getcwd(), "2_BinnedIntegrationAndFitting", scan_name, "BinnedOutput/Fityk/peak_centers.txt")
+ 
+    if os.path.exists(peak_centers_file):
+        q_centroids_list = np.loadtxt(peak_centers_file)
+    else:
+        logger.warning(f"Fityk output file not found: {peak_centers_file}. Filling with NaNs.")
+
+    q_centroids_list = np.reshape(q_centroids_list, (len(chi), num_peaks))
+    q_centroids_arr = np.array(q_centroids_list).T #Keep the transpose for returned arrays b/c of Aaron's subsequent formatting
+    #q_errors_arr = np.array(q_errors_list).T
+
+    bin_labeled_centroids = np.column_stack((chi, q_centroids_arr.T)) #Un-transpose for data readability
+    # bin_labeled_errors = np.column_stack((chi, q_errors_arr.T))
+    peak_headers = "\t".join([f"Peak_{i+1}" for i in range(num_peaks)])
+    headers_with_bin_label = f"Chi_Azimuth_(deg)\t{peak_headers}"
+
+     # Save the results to text files if an output directory is provided
+    if output_dir is not None:
+        q_chi_path = os.path.join(output_dir, "q_vs_chi_peaks_fityk.txt")
+        np.savetxt(q_chi_path, bin_labeled_centroids, fmt="%.6f", delimiter="\t", header=headers_with_bin_label)
+        logger.info(f"q vs chi centroid data (FITYK OUTPUTS!) formatted and saved to: {q_chi_path}")
+
+    else:
+        logger.warning("No output directory provided! q vs chi data was not saved!")
+
+    return q_centroids_arr
+
+
+
+def plot_q_vs_chi_stacked(q_centroids_arr, source_of_fit=None, output_dir=None, chi_deg=None, dpi=600, plot=True, calibrant=False, logger=None):
+    """
+    Plots each row of q_vs_chi_peaks.txt as a stacked subplot, with chi on the x-axis and q on the y-axis.
+    This is useful for visualizing the q(χ) variation for each diffraction ring.
+
+    Args:
+        file_path (str): Path to the q_vs_chi_peaks.txt file.
+        output_dir (str, optional): Directory to save the output plot. Defaults to None.
+        chi_deg (ndarray, optional): Azimuthal angle array in degrees. If None, assumes uniform [0, 360).
+        dpi (int): Resolution of the saved figure.
+        plot (bool, optional): If False, suppresses plotting. Defaults to True.
+        logger (logging.Logger, optional): Logger for status messages. Defaults to None.
+    """
+    import numpy as np
+    logger = logger or logging.getLogger(__name__)
+
+    q_data = q_centroids_arr # BS 7/17/26: Using q_centroids_arr directly, no need to read the text file
+    num_rings, num_chi = q_data.shape
+
+    if chi_deg is None:
+        chi_deg = np.linspace(0, 360, num_chi, endpoint=False)
+
+    if plot:
+        import matplotlib.pyplot as plt
+        plt.rcParams.update({'font.size': 16})
+        fig, axes = plt.subplots(num_rings, 1, figsize=(8, 2 * num_rings), sharex=True, dpi=dpi)
+        for i in range(num_rings):
+            ax = axes[i] if num_rings > 1 else axes
+            q_vals = q_data[i]
+            mask = ~np.isnan(q_vals)
+            ax.plot(chi_deg[mask], q_vals[mask], '.', markersize=3)
+            # ax.set_title(f'Ring {i+1}')
+            ax.set_ylabel(f'q (nm⁻¹)')
+            #BS 7/17/26: Ignoring y limit so we can see ALL the fits for now
+            #BS 7/22:/26: setting to +/- 0.25 from the mean so we can compare Aaron code to fityk
+            ax.set_ylim(np.mean(q_vals[mask])-0.25, np.mean(q_vals[mask])+0.25)
+            ax.set_xlim(0, 360)
+            
+        axes[-1].set_xlabel('Azimuth χ (°)')
+        fig.tight_layout()
+        if source_of_fit is not None:
+            fig_filename = os.path.join(output_dir, f"q_vs_chi_plot_{source_of_fit}.png")
+        else:
+            fig_filename = os.path.join(output_dir, "q_vs_chi_plot.png")
+        fig.savefig(fig_filename)
+        plt.close(fig)
+        logger.info(f"Stacked q vs chi plot saved to: {fig_filename}")
+
+
+def visualize_distortion_combined_hkl(q0_vs_chi, q_vs_chi, q0_scanid, q_scanid, hkl, output_dir=None, chi_deg=None, dpi=600,  calibrant=False, logger=None):
+    """
+    Visualizes the distortion of multiple diffraction rings by plotting ln(q/q0) vs chi in the same plot
+    
+    Args:
+        q0_vs_chi (list of ndarray): List of q0 vs chi data for each ring.
+        q_vs_chi (list of ndarray): List of q vs chi data for each ring.
+        q0_scanid: Scan ID # of reference location
+        q_scanid: Scan ID # where you are sampling
+        hkl (list of tuple): List of (h, k, l) tuples for each ring.
+        output_dir (str, optional): Directory to save the output plot. Defaults to None.
+        chi_deg (ndarray, optional): Azimuthal angle array in degrees. If None, assumes uniform [0, 360).
+        dpi (int): Resolution of the saved figure.
+        calibrant (bool, optional): If True, applies calibrant-specific settings. Defaults to False.
+        logger (logging.Logger, optional): Logger for status messages. Defaults to None.
+    """
+    logger = logger or logging.getLogger(__name__)
+    
+    num_rings, num_chi = q_vs_chi.shape
+    if chi_deg is None:
+        chi_deg = np.linspace(1.5, 358.5, num_chi, endpoint=False)
+
+    import matplotlib.pyplot as plt
+    plt.rcParams.update({'font.size': 14})
+        # Create a single figure and axis
+    fig, ax = plt.subplots(figsize=(8, 5))
+        # Overlay all rings on the same plot
+    for i, (q0, q) in enumerate(zip(q0_vs_chi, q_vs_chi)):
+        ln_ratio = np.log(q / q0)
+        ax.plot(chi_deg, ln_ratio, '.', markersize=6, label=f'Ring {i+1}')
+    # Format axes and labels
+    ax.set_title(f'Scan ID: {q_scanid}. |||  Ref. Loc. ID: {q0_scanid}')
+    ax.set_xlabel('Azimuth χ (°)')
+    ax.set_ylabel(r'$\ln(q/q_0)$')
+    ax.set_xticks(np.linspace(0, 360, 9))
+    ax.tick_params(direction = 'in')
+    ax.set_ylim(-0.0025, 0.0025)
+    labels = [f'{plane}' for plane in hkl]
+    ax.legend(labels, loc='upper left', fontsize=10, ncols=2)
+    fig.tight_layout()
+    if output_dir is not None:
+        fig_filename = os.path.join(output_dir, "strain_vs_chi_plot_combined_hkl.png")
+        fig.savefig(fig_filename)
+        plt.close(fig)
+        logger.info(f"Distortion combined HKL plot saved to: {fig_filename}")
+    
+    return fig, ax #Allows you to add on the fit to the plot in a later function
+
+# --- Plot strain vs chi stacked (modeled after plot_q_vs_chi_stacked) ---
+def plot_strain_vs_chi_stacked(file_path, output_dir=None, chi_deg=None, dpi=600, plot=True, calibrant=False, logger=None):
+    """
+    Plots each row of strain_vs_chi_peaks.txt as a stacked subplot, with chi on the x-axis and strain on the y-axis.
+    This is useful for visualizing the strain(χ) variation for each diffraction ring.
+
+    Args:
+        file_path (str): Path to the strain_vs_chi_peaks.txt file.
+        output_dir (str, optional): Directory to save the output plot. Defaults to None.
+        chi_deg (ndarray, optional): Azimuthal angle array in degrees. If None, assumes uniform [0, 360).
+        dpi (int): Resolution of the saved figure.
+        plot (bool, optional): If False, suppresses plotting. Defaults to True.
+        calibrant (bool, optional): If True, sets a fixed y-axis limit for calibrant data. Defaults to False.
+        logger (logging.Logger, optional): Logger for status messages. Defaults to None.
+    """
+    logger = logger or logging.getLogger(__name__)
+    strain_data = np.loadtxt(file_path, comments='#', delimiter='\t')
+    num_rings, num_chi = strain_data.shape
+
+    if chi_deg is None:
+        chi_deg = np.linspace(0, 360, num_chi, endpoint=False)
+
+    if plot:
+        import matplotlib.pyplot as plt
+        plt.rcParams.update({'font.size': 16})
+        fig, axes = plt.subplots(num_rings, 1, figsize=(8, 2 * num_rings), sharex=True, dpi=dpi)
+        for i in range(num_rings):
+            ax = axes[i] if num_rings > 1 else axes
+            vals = strain_data[i]
+            mask = ~np.isnan(vals)
+            ax.plot(chi_deg[mask], vals[mask]*1e6, '.', markersize=3)
+            # ax.set_title(f'Ring {i+1}')
+            ax.set_ylabel('Microstrain')
+            ax.set_xlim(0, 360)
+            ax.set_ylim(-1000, 1000)
+        axes[-1].set_xlabel('Azimuth χ (°)')
+        fig.tight_layout()
+        scatter_path = os.path.join(output_dir, "strain_vs_chi_plot.png")
+        fig.savefig(scatter_path)
+        plt.close(fig)
+        logger.info(f"Stacked strain vs chi plot saved to: {scatter_path}")
+
+# --- Compute full strain tensor ----------------------------------------
+def fit_lattice_cone_distortion(q_data, q_errors, q0_chi_data, initial_q_guesses, wavelength_nm,
+                                chi_deg=None, psi_deg=None, phi_deg=None, omega_deg=None, num_strain_components=3, MAD_threshold=8.0,
+                                output_dir=None, dpi=600, plot=True, logger=None, min_rsquared=0.0):
+    """
+    Fits a lattice cone distortion model to q(χ) data to extract strain tensor components.
+
+    This function implements the model described by He & Smith (1998) to determine
+    the components of the strain tensor (ε_ij) by fitting the variation of the
+    diffraction ring radius (q) with azimuthal angle (χ).
+
+    Args:
+        q_data (np.ndarray): Array of q centroids of shape (n_rings, n_chi_bins).
+        q_errors (np.ndarray): Array of q centroid errors of shape (n_rings, n_chi_bins).
+        q0_chi_data (np.ndarray): Array of unstrained lattice spacings (q0) for each ring.
+        initial_q_guesses (list): List of initial q values, used for plot titles.
+        wavelength_nm (float): X-ray wavelength in nanometers.
+        chi_deg (np.ndarray, optional): Azimuthal angles in degrees. Defaults to a uniform grid.
+        psi_deg, phi_deg, omega_deg (np.ndarray, optional): Sample orientation angles. Defaults to a simple geometry.
+        num_strain_components (int, optional): Number of strain components to solve for (3, 5, or 6). Defaults to 3.
+        output_dir (str, optional): Directory to save plots and results. Defaults to None.
+        dpi (int, optional): Resolution for saved plots. Defaults to 600.
+        plot (bool, optional): If True, generate and save plots. Defaults to True.
+        logger (logging.Logger, optional): Logger for status messages. Defaults to None.
+        min_rsquared (float, optional): Minimum R-squared value to accept a fit. Defaults to 0.5.
+    Returns:
+        tuple: (strain_params, strain_list, q0_list_out, strain_vs_chi_path)
+    """
+    import matplotlib.pyplot as plt
+    import statsmodels.api as sm
+    logger = logger or logging.getLogger(__name__)
+    
+    plt.rcParams.update({'font.size': 16})
+
+    os.makedirs(output_dir, exist_ok=True)
+    # collect fitted strain-vs-chi curves for overlay
+    fit_vs_chi = []
+    q_fit_vs_chi_list = []
+
+    # q_data is provided as a numpy array of shape (n_rings, n_bins)
+    n_rings, n_bins = q_data.shape
+
+    if chi_deg is None:
+        chi_deg = np.linspace(0, 360, n_bins, endpoint=False)
+    # set default orientation angles if not provided
+    if psi_deg is None:
+        psi_deg_full = np.full_like(chi_deg, 0.0) # ψ = 0°
+    if phi_deg is None:
+        phi_deg_full = np.full_like(chi_deg, 0.0) # φ = 0°
+    if omega_deg is None:
+        omega_deg_full = np.full_like(chi_deg, 90.0) # ω = 90°
+
+    strain_params = []
+    fig, axes = (plt.subplots(n_rings, 1, figsize=(10, 2 * n_rings), dpi=dpi, sharex=True) if plot else (None, None))
+    
+    if plot and n_rings == 1: axes = [axes]
+
+    # y limits for the strain vs chi plots
+    y_min, y_max = -0.0015, 0.0015
+
+    nan_dict = {key: np.nan for key in ['q0', 'eps_xx', 'eps_xy', 'eps_yy', 'eps_xz', 'eps_yz', 'eps_zz', 
+                                        'eps_xx_err', 'eps_xy_err', 'eps_yy_err', 'eps_xz_err', 'eps_yz_err', 'eps_zz_err']}
+
+    for i in range(n_rings):
+        q_vals = q_data[i]
+        q_errs = q_errors[i]
+        q0_vals_full = q0_chi_data[i] 
+        
+        # Defining q0_fixed for naming of plots
+        q0_fixed = initial_q_guesses[i]
+
+        # --- Calculate the FULL-RANGE geometric design matrix (F_all_full) ---
+        # This is used later to predict the smooth fitted curve
+        try:
+            chi_rad_full   = np.deg2rad(90-chi_deg)
+            psi_rad_full   = np.deg2rad(psi_deg_full)
+            phi_rad_full   = np.deg2rad(phi_deg_full)
+            omega_rad_full = np.deg2rad(omega_deg_full)
+            
+            # Use the FULL q0(chi) reference to calculate theta for the model
+            theta_full     = np.arcsin((q0_vals_full * wavelength_nm) / (4 * np.pi))
+            sin_chi_full   = np.sin(chi_rad_full)
+            cos_chi_full   = np.cos(chi_rad_full)
+            sin_theta_full = np.sin(theta_full)
+            cos_theta_full = np.cos(theta_full)
+
+            a_full = sin_theta_full * np.cos(omega_rad_full) + sin_chi_full * cos_theta_full * np.sin(omega_rad_full)
+            b_full = -cos_chi_full * cos_theta_full
+            c_full = sin_theta_full * np.sin(omega_rad_full) - sin_chi_full * cos_theta_full * np.cos(omega_rad_full)
+            
+            A_full = a_full * np.cos(phi_rad_full) - b_full * np.cos(psi_rad_full) * np.sin(phi_rad_full) + c_full * np.sin(psi_rad_full) * np.sin(phi_rad_full)
+            B_full = a_full * np.sin(phi_rad_full) + b_full * np.cos(psi_rad_full) * np.cos(phi_rad_full) - c_full * np.sin(psi_rad_full) * np.cos(phi_rad_full)
+            C_full = b_full * np.sin(psi_rad_full) + c_full * np.cos(psi_rad_full)
+            
+            f11_full, f12_full, f22_full = A_full**2, 2*A_full*B_full, B_full**2
+            f13_full, f23_full, f33_full = 2*A_full*C_full, 2*B_full*C_full, C_full**2
+            
+            F_all_full = np.vstack([f11_full, f12_full, f22_full, f13_full, f23_full, f33_full]).T
+        
+        except Exception as e:
+            logger.error(f"Failed to build geometric model for Ring {i+1}. Skipping. Error: {e}")
+            strain_params.append(nan_dict.copy())
+            q_fit_vs_chi_list.append(np.full(n_bins, np.nan))
+            if plot:
+                axes[i].set_title(f"Ring {i+1}: Model build failed"); axes[i].axis('off')
+            continue
+
+        # Filter out any NaN values from the input data
+        mask = ~np.isnan(q_vals) & ~np.isnan(q_errs) & ~np.isnan(q0_vals_full)
+        x, y, y_err, q0_masked = chi_deg[mask], q_vals[mask], q_errs[mask], q0_vals_full[mask]
+        
+        # Filter outliers using the Median Absolute Deviation (MAD) method
+        if len(y) > 0: # Ensure there is data to filter
+            median_q = np.median(y)
+            abs_deviation = np.abs(y - median_q)
+            mad = np.median(abs_deviation)
+            threshold = MAD_threshold * mad # Define the outlier threshold (3.0 is a good starting point)
+            outlier_mask = abs_deviation < threshold # Keep only the points within the threshold
+            num_outliers = len(y) - np.sum(outlier_mask) # Log how many points were removed
+            if num_outliers > 0:
+                logger.info(f"Ring {i+1}: Removed {num_outliers} outliers using MAD filter.")
+                
+            # Apply outlier_mask to all data arrays, including q0_masked
+            x, y, y_err, q0_masked = x[outlier_mask], y[outlier_mask], y_err[outlier_mask], q0_masked[outlier_mask]
+        
+        # Ensure a minimum error value to avoid division by zero in weights
+        min_error = 1e-6
+        y_err = np.maximum(y_err, min_error)
+
+        # Skip ring if there are not enough data points for a reliable fit
+        if len(x) < 20:
+            logger.warning(f"Ring {i+1}: insufficient data points ({len(x)} < 20). Skipping.")
+            if plot:
+                axes[i].set_title(f"Ring {i+1}: insufficient data"); axes[i].axis('off')
+            strain_params.append(nan_dict.copy()) # creates a dictionary of NaN values if the ring is skipped
+            fit_vs_chi.append(np.full(n_bins, np.nan))
+            continue
+
+        try:
+            # --- Geometric Transformations and Model Setup ---
+            chi_rad   = np.deg2rad(90-x) # transform so χ is aligned with the coordinate system in He & Smith 1998
+            psi_rad   = np.deg2rad(psi_deg_full[mask][outlier_mask]) # Use consistent geometry
+            phi_rad   = np.deg2rad(phi_deg_full[mask][outlier_mask])
+            omega_rad = np.deg2rad(omega_deg_full[mask][outlier_mask])
+            # Compute θ for each centroid: θ = arcsin(q*λ/(4π))
+            theta     = np.arcsin((y * wavelength_nm) / (4 * np.pi))
+            sin_chi   = np.sin(chi_rad)
+            cos_chi   = np.cos(chi_rad)
+            sin_theta = np.sin(theta)
+            cos_theta = np.cos(theta)
+            # Intermediate parameters a, b, c from Table 1 He & Smith 1998
+            a = sin_theta * np.cos(omega_rad) + sin_chi * cos_theta * np.sin(omega_rad)
+            b = -cos_chi * cos_theta
+            c = sin_theta * np.sin(omega_rad) - sin_chi * cos_theta * np.cos(omega_rad)
+            # Direction cosines A, B, C
+            A = a * np.cos(phi_rad) - b * np.cos(psi_rad) * np.sin(phi_rad) + c * np.sin(psi_rad) * np.sin(phi_rad)
+            B = a * np.sin(phi_rad) + b * np.cos(psi_rad) * np.cos(phi_rad) - c * np.sin(psi_rad) * np.cos(phi_rad)
+            C = b * np.sin(psi_rad) + c * np.cos(psi_rad)
+            # Defining the strain coefficients: f_ij
+            f11, f12, f22, f13, f23, f33 = A**2, 2*A*B, B**2, 2*A*C, 2*B*C, C**2
+            
+            # The model is y_meas = F * [strain_components]
+            F_all_masked = np.vstack([f11, f12, f22, f13, f23, f33]).T
+            y_meas = np.log(q0_masked / y)
+            
+            # Propagate errors to get weights for the Weighted Least Squares (WLS) fit
+            # Error in y_meas = ln(q0/q) is approx. sigma_q / q
+            y_meas_err = y_err / y
+            y_meas_err[y_meas_err == 0] = min_error # Avoid division by zero
+            weights = 1.0 / (y_meas_err**2)
+            
+            epsilon = '\u03B5' # ε
+            logger.info(f"The model is solving for {num_strain_components} strain components.")
+            # Select the appropriate columns of the design matrix F based on the desired model
+            if num_strain_components == 6:
+                F_fit = F_all_masked
+                F_model = F_all_full # Full model for prediction
+                param_names = ['eps_xx', 'eps_xy', 'eps_yy', 'eps_xz', 'eps_yz', 'eps_zz']
+                if i==1: logger.info(f"No strain components are set to 0")
+            elif num_strain_components == 5:
+                F_fit = F_all_masked[:, [0, 1, 2, 3, 4]]
+                F_model = F_all_full[:, [0, 1, 2, 3, 4]]
+                param_names = ['eps_xx', 'eps_xy', 'eps_yy', 'eps_xz', 'eps_yz']
+                if i==1: logger.info(f"{epsilon}33 is set to zero")
+            elif num_strain_components == 3:
+                F_fit = F_all_masked[:, [0, 1, 2]]
+                F_model = F_all_full[:, [0, 1, 2]]
+                param_names = ['eps_xx', 'eps_xy', 'eps_yy']
+                if i==1: logger.info(f"{epsilon}13, {epsilon}23, & {epsilon}33 are set to zero")
+            else: 
+                F = F_all[:, [0, 1, 2]]
+                param_names = ['eps_xx', 'eps_xy', 'eps_yy']
+                if i==1: logger.warning(f"An incompatible number of strain components was selected. The only valid numbers are 3 (biaxial), 5 (biaxial w/ shear) & 6 (full strain tensor). Defaulting to biaxial.")
+
+            # --- Perform WLS fit ---
+            wls_model = sm.WLS(y_meas, F_fit, weights=weights)
+            results = wls_model.fit()
+            
+            # Filter out poor fits based on the R-squared value
+            if results.rsquared < min_rsquared:
+                raise ValueError(f"R-squared ({results.rsquared:.3f}) is below the threshold of {min_rsquared}.")
+
+            # Store results and errors
+            params = {f'{p}': val for p, val in zip(param_names, results.params)}
+            errors = {f'{p}_err': err for p, err in zip(param_names, results.bse)}
+            
+            # Fill in NaNs for components not in the fit
+            full_params = nan_dict.copy()
+            full_params['q0'] = np.mean(q0_masked)
+            full_params.update(params)
+            full_params.update(errors)
+            strain_params.append(full_params)
+
+            # --- Generate and save fitted q(chi) curve ---
+            fitted_params = results.params
+            eps_fit_full = F_model @ fitted_params
+            q_fit_full = q0_vals_full / np.exp(eps_fit_full)
+            q_fit_vs_chi_list.append(q_fit_full)
+
+            if plot:
+                ax = axes[i]
+                ax.plot(x, y_meas*1e6, '.', markersize=3, label='ln(q₀/q)')
+                ax.plot(x, results.fittedvalues*1e6, '-', label='Fit') # Use results.fittedvalues
+                ax.set_ylabel('Microstrain')
+                # ax.set_ylabel(f'{epsilon}=ln(q₀/q)')
+                ax.set_ylim(-1000,1000)
+                ax.set_xlim(0, 360)
+                # ax.set_title(f'Ring {i+1} (q₀ = {q0_fixed:.4f} nm⁻¹)')
+                # ax.set_title(f'q₀ = {q0_fixed:.4f} nm⁻¹')
+                ax.legend(loc='lower left', bbox_to_anchor=(1.02, 0.02))
+        
+        except (ValueError, np.linalg.LinAlgError):
+            if plot:
+                axes[i].set_title(f"Ring {i+1} (q₀ = {q0_fixed:.4f} nm⁻¹): fit failed"); axes[i].axis('off')
+            strain_params.append(nan_dict.copy())
+            q_fit_vs_chi_list.append(np.full(n_bins, np.nan)) # Add NaNs for failed filt
+            logger.exception(f"Fit failed for Ring {i+1}")
+
+    if plot:
+        axes[-1].set_xlabel('Azimuth χ (°)')
+        fig.tight_layout()
+        fig_path = os.path.join(output_dir, "strain_vs_chi_plot_fitted.png")
+        fig.savefig(fig_path)
+        plt.close('all')
+        logger.info(f"Combined distortion fit plot saved to: {fig_path}")
+
+    # Calculate the average strain for each ring
+    strain_list = []
+    for i, row in enumerate(q_data):
+        mask = ~np.isnan(row)
+        q_avg = np.mean(row[mask]) if np.any(mask) else np.nan
+        q0 = strain_params[i].get('q0', np.nan)
+        if not np.isnan(q0) and q0 != 0 and not np.isnan(q_avg):
+            strain = (q0 - q_avg) / q0
+        else:
+            strain = np.nan
+        strain_list.append(strain)
+
+    # Extract the list of q0 values used for the fits
+    q0_list_out = [p.get('q0', np.nan) for p in strain_params]
+
+    # Save the full strain vs chi array
+    strain_vs_chi = (q0_chi_data - q_data) / q0_chi_data
+    strain_vs_chi_path = os.path.join(output_dir, "strain_vs_chi_peaks.txt")
+    np.savetxt(strain_vs_chi_path, strain_vs_chi, fmt="%.6e", delimiter="\t",
+               header="Rows = diffraction rings; Columns = azimuthal bins (strain vs chi data)")
+    logger.info(f"Strain vs chi centroid data saved to: {strain_vs_chi_path}")
+
+    # Save the fitted q0(chi) reference data
+    q_fit_vs_chi = np.array(q_fit_vs_chi_list)
+    q_fit_vs_chi_path = os.path.join(output_dir, "q0_vs_chi_FITTED.txt")
+    np.savetxt(q_fit_vs_chi_path, q_fit_vs_chi, fmt="%.6e", delimiter="\t",
+               header="Rows = diffraction rings; Columns = azimuthal bins (FITTED q0(chi) from strain model)")
+    logger.info(f"Fitted q0(chi) reference data saved to: {q_fit_vs_chi_path}")
+
+    return strain_params, strain_list, q0_list_out, strain_vs_chi_path
+
+def calculate_and_log_map_error_metrics(data_map, error_map, map_name, logger, file_handle=None):
+    """
+    Calculates error metrics for a given data map and its corresponding error map.
+
+    Metrics include average error, RMS error, and the standard deviation of the data itself.
+
+    Args:
+        data_map (np.ndarray): The 2D map of data values.
+        error_map (np.ndarray): The 2D map of measurement errors.
+        map_name (str): The name of the map for logging purposes.
+        logger (logging.Logger): Logger for console output.
+        file_handle (file object, optional): A file handle to write the metrics to. Defaults to None.
+    """
+    import numpy as np
+
+    valid_errors = error_map[~np.isnan(error_map)]
+    valid_data = data_map[~np.isnan(data_map)]
+
+    if valid_errors.size == 0:
+        logger.warning(f"No valid data to calculate error metrics for {map_name}.")
+        return
+
+    avg_error = np.mean(valid_errors)
+    rms_error = np.sqrt(np.mean(valid_errors**2))
+    std_dev_of_values = np.std(valid_data)
+
+    # --- Create the output string ---
+    header = f"--- Error Metrics for: {map_name} ---"
+    metrics_str = (
+        f"{header}\n"
+        f"    Average Measurement Error: {avg_error:.3e}\n"
+        f"    RMS of Measurement Error:  {rms_error:.3e}\n"
+        f"    Standard Deviation of Map Values (Spatial Variation): {std_dev_of_values:.3e}\n"
+        f"{'-' * len(header)}\n"
+    )
+
+    # Log to console/main log file
+    logger.info(metrics_str)
+
+    # --- Write to the summary text file if a handle is provided ---
+    if file_handle:
+        file_handle.write(metrics_str + "\n")
+
+# --- Generate strain maps from JSON ---------------------------------
+# Generates the strain maps without the need to have a different function for contiguous and
+# non-contiguous scan layouts
+def generate_strain_maps_from_json(
+    json_path,
+    n_rows,
+    n_cols,
+    step_size,
+    pixel_size_map,
+    start_xy=(0.0, 0.0),
+    gap_mm=None,
+    color_limit_window=None,
+    map_offset_xy=(0.0, 0.0),
+    trim_edges=False,
+    map_x_limits=None,
+    map_y_limits=None,
+    title_and_labels=True,
+    colorbar_scale=None,
+    output_dir="StrainMaps",
+    dpi=600,
+    map_name_pfx="strain-map_",
+    logger=None,
+    num_strain_components=3,
+    colorbar_bins=11,
+):
+    """
+    Generates and saves strain maps from a JSON file containing strain tensor data.
+
+    This function reads strain tensor components for a grid of measurement points,
+    reshapes them into 2D maps, and plots them as physically scaled images. It also
+    calculates and saves a summary of error metrics.
+
+    Args:
+        json_path (str): Path to the input JSON file.
+        n_rows (int): Number of rows in the measurement grid.
+        n_cols (int): Number of columns in the measurement grid.
+        step_size (tuple): (dX, dY) step size in millimeters.
+        pixel_size_map (tuple): (width, height) of each measurement point's representation on the map.
+        start_xy (tuple, optional): (X, Y) coordinates of the first point (top-left). Defaults to (0.0, 0.0).
+        gap_mm (float, optional): Additional gap between columns. Defaults to None.
+        color_limit_window (tuple, optional): (x_min, x_max) in mm to define a window for color scale limits and error calculation. Defaults to None.
+        map_offset_xy (tuple, optional): (X, Y) offset to apply to the entire map. Defaults to (0.0, 0.0).
+        trim_edges (bool, optional): If True, trims map edges to not go below zero. Defaults to False.
+        title_and_labels (bool, optional): If False, hides titles and labels on plots. Defaults to True.
+        colorbar_scale (tuple, optional): (vmin, vmax) for the color bar. Defaults to auto-scaling.
+        output_dir (str, optional): Directory to save maps and summary. Defaults to "StrainMaps".
+        num_strain_components (int, optional): Number of strain components to plot (3, 5, or 6). Defaults to 3.
+    """
+    import os, numpy as np, json, time
+    import matplotlib.pyplot as plt, matplotlib.patches as patches, matplotlib.colors as mcolors
+    from matplotlib.ticker import FuncFormatter
+    from matplotlib.cm import ScalarMappable
+    import matplotlib.ticker as mticker
+    from joblib import Parallel, delayed
+    
+    logger = logger or logging.getLogger(__name__)
+    
+    os.makedirs(output_dir, exist_ok=True)
+    
+    with open(json_path, 'r') as f:
+        strain_data = json.load(f)
+
+    # Data validation
+    num_points = len(strain_data)
+    if num_points != n_rows * n_cols:
+        raise ValueError(f"Grid dimension mismatch! JSON data points ({num_points}) do not match grid ({n_rows}x{n_cols}).")
+    logger.info(f"Loaded {num_points} data points for a {n_rows}x{n_cols} grid.")
+
+    num_rings = len(strain_data[0].get("strain_tensor", []))
+    if gap_mm is None: gap_mm = 0.0
+
+    # --- Data Extraction ---
+    value_keys = ['eps_xx', 'eps_xy', 'eps_yy', 'eps_xz', 'eps_yz', 'eps_zz']
+    error_keys = [f'{key}_err' for key in value_keys]
+
+    filtered_values = [[] for _ in range(num_rings)]
+    filtered_errors = [[] for _ in range(num_rings)]
+
+    for entry in strain_data:
+        tensors = entry.get("strain_tensor", [])
+        for i in range(num_rings):
+            if i < len(tensors) and isinstance(tensors[i], dict):
+                filtered_values[i].append([tensors[i].get(k, np.nan) for k in value_keys])
+                filtered_errors[i].append([tensors[i].get(k, np.nan) for k in error_keys])
+            else:
+                filtered_values[i].append([np.nan] * 6)
+                filtered_errors[i].append([np.nan] * 6)
+
+    # Select components to plot based on the input parameter
+    if num_strain_components == 6:
+        components_to_plot = ['xx', 'xy', 'yy', 'xz', 'yz', 'zz']
+    elif num_strain_components == 5:
+        components_to_plot = ['xx', 'xy', 'yy', 'xz', 'yz']
+    else:  # Default to 3 components (biaxial)
+        components_to_plot = ['xx', 'xy', 'yy']
+        if num_strain_components != 3:
+            logger.warning(f"Invalid num_strain_components ({num_strain_components}). Defaulting to 3.")
+    
+    all_components = [
+        {'name': 'xx', 'index': 0, 'title': 'Strain_xx', 'latex': r'$\varepsilon_{xx}$'},
+        {'name': 'xy', 'index': 1, 'title': 'Strain_xy', 'latex': r'$\varepsilon_{xy}$'},
+        {'name': 'yy', 'index': 2, 'title': 'Strain_yy', 'latex': r'$\varepsilon_{yy}$'},
+        {'name': 'xz', 'index': 3, 'title': 'Strain_xz', 'latex': r'$\varepsilon_{xz}$'},
+        {'name': 'yz', 'index': 4, 'title': 'Strain_yz', 'latex': r'$\varepsilon_{yz}$'},
+        {'name': 'zz', 'index': 5, 'title': 'Strain_zz', 'latex': r'$\varepsilon_{zz}$'}
+    ]
+    components_to_process = [c for c in all_components if c['name'] in components_to_plot]
+
+    # --- Map Geometry Setup ---
+    pixel_size_unit = "mm"
+    startX, startY = start_xy
+    shiftX, shiftY = map_offset_xy
+    startX += shiftX
+    startY += shiftY
+    
+    dX, dY = step_size
+    
+    # Pre-calculate column indices for the color limit window if specified
+    win_idx0, win_idx1 = None, None
+    if color_limit_window:
+        x_min_win, x_max_win = color_limit_window
+        # Adjust window by the same offset to sample the correct region
+        x_min_win_shifted, x_max_win_shifted = x_min_win + shiftX, x_max_win + shiftX
+        
+        col_step = dX + gap_mm
+        win_idx0 = max(0, int(np.floor((x_min_win_shifted - startX) / col_step)))
+        win_idx1 = min(n_cols, int(np.ceil((x_max_win_shifted - startX) / col_step)))
+        logger.info(f"Error metrics will be calculated based on the window defined by columns {win_idx0} to {win_idx1}.")
+
+    colorbar_bins=colorbar_bins
+    # --- Plotting Function ---
+    def plot_and_save(data, title, filename, colorbar_bins):
+        # Global fontsize adjustment
+        plt.rcParams.update({'font.size': 10.5})
+        
+
+        data = np.flipud(data)
+
+        fig, ax = plt.subplots(figsize=(3.5, 4), dpi=dpi)
+        cmap = plt.cm.jet.copy()
+        
+        data_min, data_max = np.nanmin(data), np.nanmax(data)
+        # Determine color scale limits, either from a window or the full map
+        if color_limit_window:
+            x_min_win, x_max_win = color_limit_window
+            x_min_win_shifted, x_max_win_shifted = x_min_win + shiftX, x_max_win + shiftX
+            
+            idx0 = max(0, int(np.floor((x_min_win_shifted - startX) / (dX + gap_mm))))
+            idx1 = min(n_cols, int(np.ceil((x_max_win_shifted - startX) / (dX + gap_mm))))
+            subset = data[:, idx0:idx1]
+            if np.any(~np.isnan(subset)):
+                data_min, data_max = np.nanmin(subset), np.nanmax(subset)
+        
+        if colorbar_scale:
+            norm = mcolors.Normalize(vmin=colorbar_scale[0], vmax=colorbar_scale[1])
+        else:
+            norm = mcolors.Normalize(vmin=data_min, vmax=data_max)
+
+        pixel_width, pixel_height = pixel_size_map
+
+        # Draw a colored rectangle for each data point
+        for i in range(n_rows):
+            for j in range(n_cols):
+                strain_val = data[i, j]
+                if np.isnan(strain_val): continue
+                
+                center_x = startX + j * (dX + gap_mm)
+                center_y = startY + i * dY
+                
+                bottom_left_x = center_x - (pixel_width / 2)
+                bottom_left_y = center_y - (pixel_height / 2)
+                
+                rect = patches.Rectangle((bottom_left_x, bottom_left_y), pixel_width, pixel_height, facecolor=cmap(norm(strain_val)))
+                ax.add_patch(rect)
+
+        # Set map boundaries
+        x_min_edge = startX - (pixel_width / 2)
+        x_max_edge = startX + (n_cols - 1) * (dX + gap_mm) + (pixel_width / 2)        
+        y_max_edge = startY - (pixel_height / 2)
+        y_min_edge = startY + (n_rows - 1) * dY + (pixel_height / 2)
+        
+        if trim_edges:
+            x_min_edge = max(x_min_edge, 0.0)
+            y_min_edge = max(y_min_edge, 0.0)
+
+        if map_x_limits:
+            x_min_edge, x_max_edge = map_x_limits
+        if map_y_limits:
+            y_max_edge, y_min_edge = map_y_limits
+            
+        ax.set_xlim(x_min_edge, x_max_edge)
+        ax.set_ylim(y_max_edge, y_min_edge)
+        ax.set_aspect('equal', adjustable='box')
+        
+        # Add colorbar and labels
+        sm = ScalarMappable(cmap=cmap, norm=norm)
+        if title_and_labels:
+            cb = fig.colorbar(sm, ax=ax, shrink=0.8, pad=0.05)
+            cb.set_label('Microstrain [με]')
+            cb.formatter = FuncFormatter(lambda x, _: f"{(x * 1e6):.0f}")
+            cb.locator = mticker.MaxNLocator(nbins=colorbar_bins)
+            cb.update_ticks()
+
+            ax.set_title(title)
+            ax.set_xlabel(f'X Position [{pixel_size_unit}]')
+            ax.set_ylabel(f'Y Position [{pixel_size_unit}]')
+        plt.tight_layout()
+        filepath = os.path.join(output_dir, filename)
+        plt.savefig(filepath)
+        plt.close()
+        logger.info(f"{title} heatmap saved to: {filepath}")
+
+    # --- Main Processing Logic ---
+    def _plot_one_ring(ring_index, value_data, error_data):
+        strain_array = np.array(value_data).reshape((n_rows, n_cols, 6))
+        
+        for comp in components_to_process:
+            name, index, title_latex = comp['name'], comp['index'], comp['latex']
+            data_map = strain_array[:, :, index]
+            title = f"{title_latex} (Ring {ring_index + 1})"
+            filename = f"{map_name_pfx}_{name}_ring{ring_index + 1}.png"
+            plot_and_save(data_map, title, filename, colorbar_bins)
+        
+        eps_xx = strain_array[:,:,0] if 'xx' in components_to_plot else 0.0
+        eps_xy = strain_array[:,:,1] if 'xy' in components_to_plot else 0.0
+        eps_yy = strain_array[:,:,2] if 'yy' in components_to_plot else 0.0
+        eps_xz = strain_array[:,:,3] if 'xz' in components_to_plot else 0.0
+        eps_yz = strain_array[:,:,4] if 'yz' in components_to_plot else 0.0
+        eps_zz = strain_array[:,:,5] if 'zz' in components_to_plot else 0.0
+        
+        # Calculate von Mises equivalent strain
+        vm_strain = np.sqrt(((eps_xx - eps_yy)**2 + (eps_yy - eps_zz)**2 + (eps_zz - eps_xx)**2) / 2 + 3 * (eps_xy**2 + eps_xz**2 + eps_yz**2))
+        title_vm = f"$\\varepsilon_{{VM}}$ (Ring {ring_index + 1})"
+        filename_vm = f"{map_name_pfx}_Mises_ring{ring_index + 1}.png"
+        plot_and_save(vm_strain, title_vm, filename_vm, colorbar_bins)
+
+    # Plot maps for each ring in parallel
+    Parallel(n_jobs=-1)(delayed(_plot_one_ring)(i, filtered_values[i], filtered_errors[i]) for i in range(num_rings))
+
+    # --- Error Metrics Summary ---
+    summary_filepath = os.path.join(output_dir, "error_metrics_summary.txt")
+    with open(summary_filepath, 'w') as f:
+        f.write(f"Error Metrics Summary for: {map_name_pfx}\n")
+        f.write(f"Generated on: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+        if color_limit_window:
+            f.write(f"Metrics calculated for data within x-window: {color_limit_window} mm\n")
+        f.write("="*50 + "\n\n")
+
+        f.write("--- Metrics for Each Ring ---\n\n")
+        for i in range(num_rings):
+            strain_array = np.array(filtered_values[i]).reshape((n_rows, n_cols, 6))
+            error_array = np.array(filtered_errors[i]).reshape((n_rows, n_cols, 6))
+
+            for comp in components_to_process:
+                data_map = strain_array[:, :, comp['index']]
+                error_map = error_array[:, :, comp['index']]
+                map_name = f"{comp['title']} Ring {i+1}"
+                
+                # Use the windowed subset for calculation if defined
+                if win_idx0 is not None:
+                    data_subset = data_map[:, win_idx0:win_idx1]
+                    error_subset = error_map[:, win_idx0:win_idx1]
+                    map_name_for_calc = f"{map_name} (Windowed)"
+                else:
+                    data_subset = data_map
+                    error_subset = error_map
+                    map_name_for_calc = map_name
+                
+                calculate_and_log_map_error_metrics(data_subset, error_subset, map_name_for_calc, logger, file_handle=f)
+            
+            eps_xx, eps_yy, eps_zz, eps_xy = strain_array[:,:,0], strain_array[:,:,2], strain_array[:,:,5], strain_array[:,:,1]
+            err_xx, err_yy, err_zz, err_xy = error_array[:,:,0], error_array[:,:,2], error_array[:,:,5], error_array[:,:,1]
+            vm_strain = np.sqrt(((eps_xx - eps_yy)**2 + (eps_yy - eps_zz)**2 + (eps_zz - eps_xx)**2) / 2 + 3 * (eps_xy**2))
+            # Note: This error propagation for von Mises is a simple approximation
+            err_vm = np.sqrt(err_xx**2 + err_yy**2 + err_zz**2 + err_xy**2)
+            
+            # Apply slicing for von Mises calculation as well
+            if win_idx0 is not None:
+                vm_strain_subset = vm_strain[:, win_idx0:win_idx1]
+                err_vm_subset = err_vm[:, win_idx0:win_idx1]
+                map_name_for_calc = f"Strain_VM Ring {i+1} (Windowed)"
+            else:
+                vm_strain_subset = vm_strain
+                err_vm_subset = err_vm
+                map_name_for_calc = f"Strain_VM Ring {i+1}"
+
+            calculate_and_log_map_error_metrics(vm_strain_subset, err_vm_subset, map_name_for_calc, logger, file_handle=f)
+
+        # --- Averaged Maps and Metrics ---
+        f.write("\n--- Metrics for Averaged Maps ---\n\n")
+        avg_maps = {}
+        avg_error_maps = {}
+        for comp in components_to_process:
+            name, index, title = comp['name'], comp['index'], comp['title']
+            avg_map = np.nanmean([np.array(r)[:, index].reshape(n_rows, n_cols) for r in filtered_values], axis=0)
+            avg_maps[name] = avg_map
+            error_maps = [np.array(r)[:, index].reshape(n_rows, n_cols) for r in filtered_errors]
+            # Combine errors in quadrature
+            avg_error_map = np.sqrt(np.nanmean(np.square(error_maps), axis=0))
+            avg_error_maps[name] = avg_error_map
+
+            if win_idx0 is not None:
+                avg_map_subset = avg_map[:, win_idx0:win_idx1]
+                avg_error_map_subset = avg_error_map[:, win_idx0:win_idx1]
+                map_name_for_calc = f"{title} (Windowed)"
+            else:
+                avg_map_subset = avg_map
+                avg_error_map_subset = avg_error_map
+                map_name_for_calc = title
+            calculate_and_log_map_error_metrics(avg_map_subset, avg_error_map_subset, map_name_for_calc, logger, file_handle=f)
+
+        # Plot the final averaged maps
+        for comp in components_to_process:
+            name = comp['name']
+            latex_title = comp['latex']
+            filename = f"{map_name_pfx}_{name}_avg.png"
+            plot_and_save(avg_maps[name], f"{latex_title} (Avg)", filename, colorbar_bins)
+        
+        vm_title = 'Strain_VM (Avg)'
+        vm_title_latex = r'$\varepsilon_{VM}$ (Avg)'
+        
+        s_xx = avg_maps.get('xx', np.nan)
+        s_xy = avg_maps.get('xy', np.nan)
+        s_yy = avg_maps.get('yy', np.nan)
+        s_xz = avg_maps.get('xz', 0.0)
+        s_yz = avg_maps.get('yz', 0.0)
+        s_zz = avg_maps.get('zz', 0.0)
+
+        # Calculate average von Mises strain
+        avg_vm_strain = np.sqrt(0.5 * ((s_xx-s_yy)**2 + (s_yy-s_zz)**2 + (s_zz-s_xx)**2) + 3*(s_xy**2 + s_xz**2 + s_yz**2))
+
+        err_xx = avg_error_maps.get('xx', np.nan)
+        err_xy = avg_error_maps.get('xy', np.nan)
+        err_yy = avg_error_maps.get('yy', np.nan)
+        err_xz = avg_error_maps.get('xz', 0.0)
+        err_yz = avg_error_maps.get('yz', 0.0)
+        err_zz = avg_error_maps.get('zz', 0.0)
+        
+        # Approximate error for average von Mises strain
+        avg_vm_error = np.sqrt(err_xx**2 + err_yy**2 + err_zz**2 + err_xy**2 + err_xz**2 + err_yz**2)
+
+        if win_idx0 is not None:
+            avg_vm_strain_subset = avg_vm_strain[:, win_idx0:win_idx1]
+            avg_vm_error_subset = avg_vm_error[:, win_idx0:win_idx1]
+            map_name_for_calc = f"{vm_title} (Windowed)"
+        else:
+            avg_vm_strain_subset = avg_vm_strain
+            avg_vm_error_subset = avg_vm_error
+            map_name_for_calc = vm_title
+
+        calculate_and_log_map_error_metrics(avg_vm_strain_subset, avg_vm_error_subset, map_name_for_calc, logger, file_handle=f)
+
+        plot_and_save(avg_vm_strain, vm_title_latex, f"{map_name_pfx}_Mises_avg.png", colorbar_bins)
+
+    logger.info("Averaged maps plotted and error summary file saved.")
+
+# --- Utility: Reconstruct simulated diffraction rings using fitted strain tensor components ---
+def reconstruct_rings_from_json(json_path, wavelength_nm, chi_step=1.0, logger=None, plot=True, output_dir=None):
+    """
+    Reconstruct simulated diffraction rings using fitted strain tensor components.
+    This function takes the fitted strain tensor from a JSON file and calculates the
+    expected q(χ) variation for each diffraction ring.
+
+    Args:
+        json_path (str): Path to the JSON file with strain tensor data.
+        wavelength_nm (float): X-ray wavelength in nanometers.
+        chi_step (float, optional): Step size in degrees for the χ grid. Defaults to 1.0.
+        logger (logging.Logger, optional): Logger for status messages. Defaults to None.
+        plot (bool, optional): If True, generate and save plots. Defaults to True.
+        output_dir (str, optional): Directory to save plots. Defaults to None.
+
+    Returns:
+        dict: A dictionary where keys are ring indices and values are lists of (chi_deg, q_sim) tuples.
+    """
+    import matplotlib.pyplot as plt
+
+    with open(json_path, "r") as f:
+        strain_data = json.load(f)
+
+    chi_deg = np.arange(0, 360, chi_step)
+    # Apply the same convention correction as in fit_lattice_cone_distortion
+    chi_rad = np.deg2rad(90.0 - chi_deg)
+    results = {}
+
+    for entry in strain_data:
+        if "strain_tensor" not in entry:
+            continue
+        # --- Reconstruct q(chi) for each ring in the entry ---
+        tensors = entry["strain_tensor"]
+        for i, tensor in enumerate(tensors):
+            eps_xx = tensor.get("eps_xx", np.nan)
+            eps_xy = tensor.get("eps_xy", np.nan)
+            eps_yy = tensor.get("eps_yy", np.nan)
+            eps_xz = tensor.get("eps_xz", np.nan)
+            eps_yz = tensor.get("eps_yz", np.nan)
+            eps_zz = tensor.get("eps_zz", np.nan)
+            q0 = tensor.get("q0", None)
+            if q0 is None:
+                if logger:
+                    logger.warning(f"No q0 value found for ring {i+1}; skipping reconstruction.")
+                continue
+
+            # --- Apply the forward model from fit_lattice_cone_distortion ---
+            phi_rad = 0.0
+            psi_rad = 0.0
+            omega_rad = np.deg2rad(90.0)
+
+            theta = np.arcsin((q0 * wavelength_nm) / (4 * np.pi))
+            cos_theta, sin_theta = np.cos(theta), np.sin(theta)
+
+            a = sin_theta * np.cos(omega_rad) + np.sin(chi_rad) * cos_theta * np.sin(omega_rad)
+            b = -np.cos(chi_rad) * cos_theta
+            c = sin_theta * np.sin(omega_rad) - np.sin(chi_rad) * cos_theta * np.cos(omega_rad)
+
+            A = a*np.cos(phi_rad) - b*np.cos(psi_rad)*np.sin(phi_rad) + c*np.sin(psi_rad)*np.sin(phi_rad)
+            B = a*np.sin(phi_rad) + b*np.cos(psi_rad)*np.cos(phi_rad) - c*np.sin(psi_rad)*np.cos(phi_rad)
+            C = b*np.sin(psi_rad) + c*np.cos(psi_rad)
+
+            f11 = A**2
+            f22 = B**2
+            f33 = C**2
+            f12 = 2 * A * B
+            f13 = 2 * A * C
+            f23 = 2 * B * C
+
+            strain_terms = (f11 * eps_xx + f22 * eps_yy + f33 * eps_zz +
+                            f12 * eps_xy + f13 * eps_xz + f23 * eps_yz)
+
+            # Calculate the simulated q-value based on the strain
+            q_sim = q0 * np.exp(-strain_terms)
+            if i+1 not in results:
+                results[i+1] = []
+            results[i+1].append((chi_deg, q_sim.tolist()))
+
+            if plot:
+                plt.figure()
+                plt.plot(chi_deg, q_sim, label=f"Ring {i+1} Simulated")
+                plt.xlabel("χ (deg)")
+                plt.ylabel("q (1/nm)")
+                plt.title(f"Reconstructed Ring {i+1}")
+                plt.legend()
+                if output_dir:
+                    os.makedirs(output_dir, exist_ok=True)
+                    plt.savefig(os.path.join(output_dir, f"ring_{i+1}_simulated.png"), dpi=600)
+                plt.close()
+
+    return results
+
+# --- Generate stress maps from JSON ---
+def generate_stress_maps_from_json(
+    json_path,
+    youngs_modulus,
+    poissons_ratio,
+    n_rows,
+    n_cols,
+    step_size,
+    pixel_size_map,
+    start_xy=(0.0, 0.0),
+    gap_mm=None,
+    color_limit_window=None,
+    map_offset_xy=(0.0, 0.0),
+    trim_edges=False,
+    map_x_limits=None,
+    map_y_limits=None,
+    colorbar_scale=None,
+    output_dir="StressMaps",
+    dpi=600,
+    map_name_pfx="stress-map_",
+    logger=None,
+):
+    """
+    Calculates stress from strain data in a JSON file and generates physically accurate stress maps.
+    Assumes an isotropic, linear elastic material under a plane strain condition (eps_zz = 0).
+    Args:
+        json_path (str): Path to the input JSON file with strain data.
+        youngs_modulus (float): Young's Modulus in GPa.
+        poissons_ratio (float): Poisson's ratio.
+        n_rows (int): Number of rows in the measurement grid.
+        n_cols (int): Number of columns in the measurement grid.
+        step_size (tuple): (dX, dY) step size in millimeters.
+        pixel_size_map (tuple): (width, height) of each measurement point's representation.
+        start_xy (tuple, optional): (X, Y) coordinates of the first point. Defaults to (0.0, 0.0).
+        gap_mm (float, optional): Additional gap between columns. Defaults to None.
+        color_limit_window (tuple, optional): (x_min, x_max) for color scale limits. Defaults to None.
+        map_offset_xy (tuple, optional): (X, Y) offset for the map. Defaults to (0.0, 0.0).
+        output_dir (str, optional): Directory to save maps. Defaults to "StressMaps".
+        logger (logging.Logger, optional): Logger for status messages. Defaults to None.
+    """
+    import numpy as np
+    import json
+    import matplotlib.pyplot as plt
+    import matplotlib.patches as patches
+    import matplotlib.colors as mcolors
+    from matplotlib.ticker import FuncFormatter
+    from matplotlib.cm import ScalarMappable
+    from joblib import Parallel, delayed
+    logger = logger or logging.getLogger(__name__)
+    os.makedirs(output_dir, exist_ok=True)
+    with open(json_path, 'r') as f:
+        strain_data = json.load(f)
+    
+    # --- Strain to Stress Conversion using Hooke's Law for Isotropic Materials ---
+    E = youngs_modulus * 1e9  # Convert GPa to Pa
+    nu = poissons_ratio
+    # Lamé parameters
+    lam = (E * nu) / ((1 + nu) * (1 - 2 * nu))
+    G = E / (2 * (1 + nu))  # Shear modulus
+    stress_data = []
+    for entry in strain_data:
+        stress_tensors = []
+        for strain_tensor in entry['strain_tensor']:
+            # Extract strain values
+            eps_xx = strain_tensor.get('eps_xx', np.nan)
+            eps_xy = strain_tensor.get('eps_xy', np.nan)
+            eps_yy = strain_tensor.get('eps_yy', np.nan)
+            eps_xz = strain_tensor.get('eps_xz', np.nan)
+            eps_yz = strain_tensor.get('eps_yz', np.nan)
+            eps_zz = 0.0 # Assuming plane strain as per the data format
+            
+            if np.isnan(eps_xx): # If strain is NaN, stress is also NaN
+                stress_tensors.append({k: np.nan for k in ['sigma_xx', 'sigma_xy', 'sigma_yy', 'sigma_xz', 'sigma_yz', 'sigma_zz']})
+                continue
+            
+            trace_eps = eps_xx + eps_yy + eps_zz
+            
+            # Hooke's Law for isotropic material (in Pa)
+            sigma_xx = 2 * G * eps_xx + lam * trace_eps
+            sigma_yy = 2 * G * eps_yy + lam * trace_eps
+            sigma_zz = lam * trace_eps # Non-zero for plane strain
+            sigma_xy = 2 * G * eps_xy
+            sigma_xz = 2 * G * eps_xz
+            sigma_yz = 2 * G * eps_yz
+
+            stress_tensors.append({
+                "sigma_xx": sigma_xx / 1e6, "sigma_xy": sigma_xy / 1e6, # Convert to MPa
+                "sigma_yy": sigma_yy / 1e6, "sigma_xz": sigma_xz / 1e6,
+                "sigma_yz": sigma_yz / 1e6, "sigma_zz": sigma_zz / 1e6,
+            })
+        stress_data.append(stress_tensors)
+
+    # --- Map Generation (similar logic to generate_strain_maps_from_json) ---
+    num_points = len(stress_data)
+    if num_points != n_rows * n_cols:
+        raise ValueError(f"Grid dimension mismatch! JSON data points ({num_points}) do not match grid ({n_rows}x{n_cols}).")
+    logger.info(f"Calculated stress for {num_points} points on a {n_rows}x{n_cols} grid.")
+    num_rings = len(stress_data[0]) if stress_data else 0
+    if gap_mm is None: gap_mm = 0.0
+
+    # Reshape the flat list of stress tensors into a list of lists for each ring
+    filtered = [[] for _ in range(num_rings)]
+    for tensors in stress_data:
+        for i in range(num_rings):
+            if i < len(tensors) and isinstance(tensors[i], dict):
+                filtered[i].append([
+                    tensors[i].get("sigma_xx", np.nan), tensors[i].get("sigma_xy", np.nan),
+                    tensors[i].get("sigma_yy", np.nan), tensors[i].get("sigma_xz", np.nan),
+                    tensors[i].get("sigma_yz", np.nan), tensors[i].get("sigma_zz", np.nan)
+                ])
+            else:
+                filtered[i].append([np.nan] * 6)
+
+    pixel_size_unit = "mm"
+    startX, startY = start_xy
+    shiftX, shiftY = map_offset_xy
+    startX += shiftX
+    startY += shiftY
+    dX, dY = step_size
+
+    # --- Plotting Function ---
+    def plot_and_save(data, title, filename):
+        data = np.flipud(data)
+        fig, ax = plt.subplots(figsize=(3.5, 4), dpi=dpi)
+        cmap = plt.cm.jet.copy()
+        
+        data_min, data_max = np.nanmin(data), np.nanmax(data)
+        if color_limit_window:
+            x_min_win, x_max_win = color_limit_window
+            x_min_win_shifted, x_max_win_shifted = x_min_win + shiftX, x_max_win + shiftX
+            idx0 = max(0, int(np.floor((x_min_win_shifted - startX) / (dX + gap_mm))))
+            idx1 = min(n_cols, int(np.ceil((x_max_win_shifted - startX) / (dX + gap_mm))))
+            subset = data[:, idx0:idx1]
+            if np.any(~np.isnan(subset)):
+                data_min, data_max = np.nanmin(subset), np.nanmax(subset)
+        
+        norm = mcolors.Normalize(vmin=colorbar_scale[0] if colorbar_scale else data_min,
+                                 vmax=colorbar_scale[1] if colorbar_scale else data_max)
+
+        pixel_width, pixel_height = pixel_size_map
+        for i in range(n_rows):
+            for j in range(n_cols):
+                val = data[i, j]
+                if np.isnan(val): continue
+                center_x, center_y = startX + j * (dX + gap_mm), startY + i * dY
+                bottom_left_x, bottom_left_y = center_x - (pixel_width / 2), center_y - (pixel_height / 2)
+                rect = patches.Rectangle((bottom_left_x, bottom_left_y), pixel_width, pixel_height, facecolor=cmap(norm(val)))
+                ax.add_patch(rect)
+
+        x_min_edge = startX - (pixel_width / 2)
+        x_max_edge = startX + (n_cols - 1) * (dX + gap_mm) + (pixel_width / 2)        
+        y_max_edge = startY - (pixel_height / 2) # counter-intuitive, but needs to be this way to make 0,0 in bottom left
+        y_min_edge = startY + (n_rows - 1) * dY + (pixel_height / 2) # same as above ^^
+        
+        if trim_edges:
+            x_min_edge = max(x_min_edge, 0.0)
+            y_min_edge = max(y_min_edge, 0.0)
+
+        if map_x_limits:
+            x_min_edge, x_max_edge = map_x_limits
+        if map_y_limits: # has to be flipped to make map plot 0,0 in bottom left
+            y_max_edge, y_min_edge = map_y_limits
+            
+        ax.set_xlim(x_min_edge, x_max_edge)
+        ax.set_ylim(y_max_edge, y_min_edge)
+        ax.set_aspect('equal', adjustable='box')
+        
+        sm = ScalarMappable(cmap=cmap, norm=norm)
+        cb = fig.colorbar(sm, ax=ax, shrink=0.8, pad=0.05)
+        cb.set_label('Stress (MPa)')
+        cb.update_ticks()
+        ax.set_title(title)
+        ax.set_xlabel(f'X Position [{pixel_size_unit}]')
+        ax.set_ylabel(f'Y Position [{pixel_size_unit}]')
+        plt.tight_layout()
+        filepath = os.path.join(output_dir, filename)
+        plt.savefig(filepath)
+        plt.close()
+        logger.info(f"{title} heatmap saved to: {filepath}")
+
+    # --- Main Processing Logic ---
+    def _plot_one_ring(ring_index, ring_data):
+        stress_array = np.array(ring_data).reshape((n_rows, n_cols, 6))
+        
+        sigma_xx = stress_array[:, :, 0]
+        sigma_xy = stress_array[:, :, 1]
+        sigma_yy = stress_array[:, :, 2]
+        sigma_xz = stress_array[:, :, 3]
+        sigma_yz = stress_array[:, :, 4]
+        sigma_zz = stress_array[:, :, 5]
+        
+        # Von Mises Stress Calculation
+        vm_stress = np.sqrt(0.5 * ((sigma_xx-sigma_yy)**2 + (sigma_yy-sigma_zz)**2 + (sigma_zz-sigma_xx)**2) + 
+                            3 * (sigma_xy**2 + sigma_xz**2 + sigma_yz**2))
+
+        ring_suffix = f"_ring{ring_index+1}"
+        plot_and_save(sigma_xx, r'$\sigma_{xx}$', f"{map_name_pfx}_xx{ring_suffix}.png")
+        plot_and_save(sigma_xy, r'$\sigma_{xy}$', f"{map_name_pfx}_xy{ring_suffix}.png")
+        plot_and_save(sigma_yy, r'$\sigma_{yy}$', f"{map_name_pfx}_yy{ring_suffix}.png")
+        plot_and_save(sigma_xz, r'$\sigma_{xz}$', f"{map_name_pfx}_xz{ring_suffix}.png")
+        plot_and_save(sigma_yz, r'$\sigma_{yz}$', f"{map_name_pfx}_yz{ring_suffix}.png")
+        plot_and_save(sigma_zz, r'$\sigma_{zz}$', f"{map_name_pfx}_zz{ring_suffix}.png")
+        plot_and_save(vm_stress, r'$\sigma_{VM}$ (von Mises)', f"{map_name_pfx}_Mises{ring_suffix}.png")
+
+    # Plot maps for each ring in parallel
+    Parallel(n_jobs=-1)(delayed(_plot_one_ring)(i, filtered[i]) for i in range(num_rings))
+
+    # --- Averaged Maps ---
+    avg_s_xx = np.nanmean([np.array(r)[:,0].reshape(n_rows,n_cols) for r in filtered], axis=0)
+    avg_s_xy = np.nanmean([np.array(r)[:,1].reshape(n_rows,n_cols) for r in filtered], axis=0)
+    avg_s_yy = np.nanmean([np.array(r)[:,2].reshape(n_rows,n_cols) for r in filtered], axis=0)
+    avg_s_xz = np.nanmean([np.array(r)[:,3].reshape(n_rows,n_cols) for r in filtered], axis=0)
+    avg_s_yz = np.nanmean([np.array(r)[:,4].reshape(n_rows,n_cols) for r in filtered], axis=0)
+    avg_s_zz = np.nanmean([np.array(r)[:,5].reshape(n_rows,n_cols) for r in filtered], axis=0)
+    avg_s_vm = np.sqrt(0.5 * ((avg_s_xx-avg_s_yy)**2 + (avg_s_yy-avg_s_zz)**2 + (avg_s_zz-avg_s_xx)**2) + 
+                       3 * (avg_s_xy**2 + avg_s_xz**2 + avg_s_yz**2))
+    
+    plot_and_save(avg_s_xx, r'$\sigma_{xx}$ (Avg)', f"{map_name_pfx}_xx_avg.png")
+    plot_and_save(avg_s_xy, r'$\sigma_{xy}$ (Avg)', f"{map_name_pfx}_xy_avg.png")
+    plot_and_save(avg_s_yy, r'$\sigma_{yy}$ (Avg)', f"{map_name_pfx}_yy_avg.png")
+    plot_and_save(avg_s_xz, r'$\sigma_{xz}$ (Avg)', f"{map_name_pfx}_xz_avg.png")
+    plot_and_save(avg_s_yz, r'$\sigma_{yz}$ (Avg)', f"{map_name_pfx}_yz_avg.png")
+    plot_and_save(avg_s_zz, r'$\sigma_{zz}$ (Avg)', f"{map_name_pfx}_zz_avg.png")
+    plot_and_save(avg_s_vm, r'$\sigma_{VM}$ (Avg)', f"{map_name_pfx}_Mises_avg.png")
+
+    # --- Find max and min average stress, potentially within a window ---
+    maps_to_summarize = {
+        "s_xx": avg_s_xx, "s_xy": avg_s_xy, "s_yy": avg_s_yy,
+        "s_xz": avg_s_xz, "s_yz": avg_s_yz, "s_zz": avg_s_zz,
+        "s_vm": avg_s_vm
+    }
+    stress_extremes = {}
+
+    if color_limit_window:
+        logger.info(f"Calculating stress extremes based on window: {color_limit_window} mm")
+        x_min_win, x_max_win = color_limit_window
+        x_min_win_shifted, x_max_win_shifted = x_min_win + shiftX, x_max_win + shiftX
+        
+        col_step = dX + (gap_mm if gap_mm else 0.0)
+        win_idx0 = max(0, int(np.floor((x_min_win_shifted - startX) / col_step)))
+        win_idx1 = min(n_cols, int(np.ceil((x_max_win_shifted - startX) / col_step)))
+        
+        logger.info(f"Window corresponds to columns {win_idx0} to {win_idx1}.")
+
+        for name, data_map in maps_to_summarize.items():
+            subset = data_map[:, win_idx0:win_idx1]
+            if np.any(~np.isnan(subset)):
+                stress_extremes[name] = (np.nanmin(subset), np.nanmax(subset))
+            else:
+                stress_extremes[name] = (np.nan, np.nan)
+    else:
+        logger.info("Calculating stress extremes based on the full map.")
+        for name, data_map in maps_to_summarize.items():
+            if np.any(~np.isnan(data_map)):
+                stress_extremes[name] = (np.nanmin(data_map), np.nanmax(data_map))
+            else:
+                stress_extremes[name] = (np.nan, np.nan)
+
+    return stress_extremes
