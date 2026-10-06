@@ -1,5 +1,88 @@
+
+######FEBRUARY 2025 DATASET###########
+
+# 25C_OnHeat
 python waxs_peakfit_v3.py 2_BinnedIntegrationAndFitting/Feb2025/Feb2025_OnHeat_25C/scan_range_169_520.h5 --config pk_alumina.yaml --output 2_BinnedIntegrationAndFitting/Feb2025/Feb2025_OnHeat_25C/scan_range_169_520_fit_max10Filt.h5
 
-python waxs_fit_strain_append.py 2_BinnedIntegrationAndFitting/Feb2025/Feb2025_OnHeat_25C/scan_range_169_520_fit_max20.h5 --wavelength-nm 0.0172978 --ref-frame 135 --num-comp 3 --phase alumina --joint
+python waxs_fit_strain_append.py 2_BinnedIntegrationAndFitting/Feb2025/Feb2025_OnHeat_25C/scan_range_169_520_fit_max10Filt.h5 --wavelength-nm 0.0172978 --ref-frame 135 --num-comp 3 --phase alumina --joint
 
-python hdf5_to_strain_json.py 2_BinnedIntegrationAndFitting/Feb2025/Feb2025_OnHeat_25C/scan_range_169_520_fit_max20.h5 --phase alumina --group 3comp_joint --n-rows 44 --n-cols 8 --first-index 0
+python hdf5_to_strain_json.py 2_BinnedIntegrationAndFitting/Feb2025/Feb2025_OnHeat_25C/scan_range_169_520_fit_max10Filt.h5 --phase alumina --group 3comp_joint --n-rows 44 --n-cols 8 --first-index 0
+
+
+
+# 200C_OnHeat
+python waxs_peakfit_v3.py 2_BinnedIntegrationAndFitting/Feb2025/Feb2025_OnHeat_200C/scan_range_649_732.h5 --config pk_alumina.yaml --output 2_BinnedIntegrationAndFitting/Feb2025/Feb2025_OnHeat_200C/scan_range_649_732_fit_max10Filt.h5
+
+python waxs_fit_strain_append.py 2_BinnedIntegrationAndFitting/Feb2025/Feb2025_OnHeat_200C/scan_range_649_732_fit_max10Filt.h5 --wavelength-nm 0.0172978 --ref-frame 26 --num-comp 3 --phase alumina --joint
+
+python hdf5_to_strain_json.py 2_BinnedIntegrationAndFitting/Feb2025/Feb2025_OnHeat_200C/scan_range_649_732_fit_max10Filt.h5 --phase alumina --group 3comp_joint --n-rows 21 --n-cols 4 --first-index 0
+
+
+
+# 400C_OnHeat
+python waxs_peakfit_v3.py 2_BinnedIntegrationAndFitting/Feb2025/Feb2025_OnHeat_400C/scan_range_763_846.h5 --config pk_alumina.yaml --output 2_BinnedIntegrationAndFitting/Feb2025/Feb2025_OnHeat_400C/scan_range_763_846_fit_max10Filt.h5
+
+python waxs_fit_strain_append.py 2_BinnedIntegrationAndFitting/Feb2025/Feb2025_OnHeat_400C/scan_range_763_846_fit_max10Filt.h5 --wavelength-nm 0.0172978 --ref-frame 26 --num-comp 3 --phase alumina --joint
+
+python hdf5_to_strain_json.py 2_BinnedIntegrationAndFitting/Feb2025/Feb2025_OnHeat_400C/scan_range_763_846_fit_max10Filt.h5 --phase alumina --group 3comp_joint --n-rows 21 --n-cols 4 --first-index 0
+
+
+
+# 600C_OnHeat
+python waxs_peakfit_v3.py 2_BinnedIntegrationAndFitting/Feb2025/Feb2025_OnHeat_600C/scan_range_878_961.h5 --config pk_alumina.yaml --output 2_BinnedIntegrationAndFitting/Feb2025/Feb2025_OnHeat_600C/scan_range_878_961_fit_max10Filt.h5
+
+python waxs_fit_strain_append.py 2_BinnedIntegrationAndFitting/Feb2025/Feb2025_OnHeat_600C/scan_range_878_961_fit_max10Filt.h5 --wavelength-nm 0.0172978 --ref-frame 26 --num-comp 3 --phase alumina --joint
+
+python hdf5_to_strain_json.py 2_BinnedIntegrationAndFitting/Feb2025/Feb2025_OnHeat_600C/scan_range_878_961_fit_max10Filt.h5 --phase alumina --group 3comp_joint --n-rows 21 --n-cols 4 --first-index 0
+
+
+
+# 800C_OnHeat
+python waxs_peakfit_v3.py 2_BinnedIntegrationAndFitting/Feb2025/Feb2025_OnHeat_800C/scan_range_992_1075.h5 --config pk_alumina.yaml --output 2_BinnedIntegrationAndFitting/Feb2025/Feb2025_OnHeat_800C/scan_range_992_1075_fit_max10Filt.h5
+
+python waxs_fit_strain_append.py 2_BinnedIntegrationAndFitting/Feb2025/Feb2025_OnHeat_800C/scan_range_992_1075_fit_max10Filt.h5 --wavelength-nm 0.0172978 --ref-frame 26 --num-comp 3 --phase alumina --joint
+
+python hdf5_to_strain_json.py 2_BinnedIntegrationAndFitting/Feb2025/Feb2025_OnHeat_800C/scan_range_992_1075_fit_max10Filt.h5 --phase alumina --group 3comp_joint --n-rows 21 --n-cols 4 --first-index 0
+
+
+
+# 600C_OnCool
+python waxs_peakfit_v3.py 2_BinnedIntegrationAndFitting/Feb2025/Feb2025_OnCool_600C/scan_range_1106_1189.h5 --config pk_alumina.yaml --output 2_BinnedIntegrationAndFitting/Feb2025/Feb2025_OnCool_600C/scan_range_1106_1189_fit_max10Filt.h5
+
+python waxs_fit_strain_append.py 2_BinnedIntegrationAndFitting/Feb2025/Feb2025_OnCool_600C/scan_range_1106_1189_fit_max10Filt.h5 --wavelength-nm 0.0172978 --ref-frame 26 --num-comp 3 --phase alumina --joint
+
+python hdf5_to_strain_json.py 2_BinnedIntegrationAndFitting/Feb2025/Feb2025_OnCool_600C/scan_range_1106_1189_fit_max10Filt.h5 --phase alumina --group 3comp_joint --n-rows 21 --n-cols 4 --first-index 0
+
+
+
+# 400C_OnCool
+python waxs_peakfit_v3.py 2_BinnedIntegrationAndFitting/Feb2025/Feb2025_OnCool_400C/scan_range_1220_1303.h5 --config pk_alumina.yaml --output 2_BinnedIntegrationAndFitting/Feb2025/Feb2025_OnCool_400C/scan_range_1220_1303_fit_max10Filt.h5
+
+python waxs_fit_strain_append.py 2_BinnedIntegrationAndFitting/Feb2025/Feb2025_OnCool_400C/scan_range_1220_1303_fit_max10Filt.h5 --wavelength-nm 0.0172978 --ref-frame 26 --num-comp 3 --phase alumina --joint
+
+python hdf5_to_strain_json.py 2_BinnedIntegrationAndFitting/Feb2025/Feb2025_OnCool_400C/scan_range_1220_1303_fit_max10Filt.h5 --phase alumina --group 3comp_joint --n-rows 21 --n-cols 4 --first-index 0
+
+
+
+# 200C_OnCool
+python waxs_peakfit_v3.py 2_BinnedIntegrationAndFitting/Feb2025/Feb2025_OnCool_200C/scan_range_1334_1417.h5 --config pk_alumina.yaml --output 2_BinnedIntegrationAndFitting/Feb2025/Feb2025_OnCool_200C/scan_range_1334_1417_fit_max10Filt.h5
+
+python waxs_fit_strain_append.py 2_BinnedIntegrationAndFitting/Feb2025/Feb2025_OnCool_200C/scan_range_1334_1417_fit_max10Filt.h5 --wavelength-nm 0.0172978 --ref-frame 26 --num-comp 3 --phase alumina --joint
+
+python hdf5_to_strain_json.py 2_BinnedIntegrationAndFitting/Feb2025/Feb2025_OnCool_200C/scan_range_1334_1417_fit_max10Filt.h5 --phase alumina --group 3comp_joint --n-rows 21 --n-cols 4 --first-index 0
+
+
+
+# 30C_OnCool
+python waxs_peakfit_v3.py 2_BinnedIntegrationAndFitting/Feb2025/Feb2025_OnCool_30C/scan_range_1448_1531.h5 --config pk_alumina.yaml --output 2_BinnedIntegrationAndFitting/Feb2025/Feb2025_OnCool_30C/scan_range_1448_1531_fit_max10Filt.h5
+
+python waxs_fit_strain_append.py 2_BinnedIntegrationAndFitting/Feb2025/Feb2025_OnCool_30C/scan_range_1448_1531_fit_max10Filt.h5 --wavelength-nm 0.0172978 --ref-frame 26 --num-comp 3 --phase alumina --joint
+
+python hdf5_to_strain_json.py 2_BinnedIntegrationAndFitting/Feb2025/Feb2025_OnCool_30C/scan_range_1448_1531_fit_max10Filt.h5 --phase alumina --group 3comp_joint --n-rows 21 --n-cols 4 --first-index 0
+
+
+
+######OCTOBER 2025 DATASET###########
+
+# Pilatus Calibration Fiddling 
+python waxs_peakfit_v3.py 2_BinnedIntegrationAndFitting/Oct2025/ceria_900mm_linkam_30C_att000/scan_range_6092_6092.h5 --config pk_ceria.yaml --output 2_BinnedIntegrationAndFitting/Oct2025/ceria_900mm_linkam_30C_att000/scan_range_6092_6092_fit_Calib1_Uncorr.h5

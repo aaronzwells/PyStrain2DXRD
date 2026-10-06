@@ -3,6 +3,8 @@
 !0_calibration/*.msk
 1_UnbinnedIntegration_PeakFinding/
 2_BinnedIntegrationAndFitting/
+ExpLog/
+Share/
 InputFiles/*
 !InputFiles/Reference_0Strain_inputs
 OutputData/*

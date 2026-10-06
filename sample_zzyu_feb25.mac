@@ -1,0 +1,1323 @@
+# For users to get service e-mails about error messages from SPEC
+# Example: ALERTLIST=ALERTCORELIST ""
+# Put your e-mail addresses here with separation by a space like in the example above.
+ALERTLIST=ALERTCORELIST " "
+
+# google doc explog 
+# doc log: https://docs.google.com/document/d/19j4n1C054ppc1ceUWvgtI8AsVydKgbYQwD1oSz9_dvY/edit?tab=t.0
+# spread sheet: 
+
+
+def sam6_maps_25C'{
+
+
+    local _xstart _xN _ystart _yN _att1 _att3 _fileName _cmd
+
+    ########## Alumina Map ###########
+    
+    _fileName="VB-APS-SSAO-6_25C_TestMap-AO"
+
+    _xstart=1.28 # [mm]
+    _xN=8 # step number in X
+
+    _ystart=17.32 # [mm]
+    _yN=44 # step number in Y
+
+    _att1= 2 # attenuator 1
+    _att3= 0 # attenuator 3
+
+   # Usage: zzyu_feb25_xyN_hydra [Nframe] [tframe] [fname] [x0] [Nx] [dx] [y0] [Ny] [dy] [nLoop] [tsleep] [Use_MTS_DigIO] [_attenwheel] [_foilwheel] [_attenC] [do_fs]
+    #zzyu_feb25_xyN_hydra 5 0.1 _fileName _xstart _xN 0.1 _ystart _yN 0.025 1 0 0 _att1 0 _att3 0
+    cmd=sprintf("zzyu_feb25_xyN_hydra 5 0.1 %s %.3f %d 0.1 %.3f %d 0.025 1 0 0 %d 0 %d 0",_fileName, _xstart, _xN, _ystart, _yN, _att1, _att3)
+    eval(cmd)
+    ########## SS304 Map ###########
+    
+    _fileName="VB-APS-SSAO-6_25C_TestMap-SS"
+
+    _xstart=1.18
+    _xN=10
+
+    _ystart=18.42
+    _yN=11
+
+    _att1=0
+    _att3=2
+
+   # Usage: zzyu_feb25_xyN_hydra [Nframe] [tframe] [fname] [x0] [Nx] [dx] [y0] [Ny] [dy] [nLoop] [tsleep] [Use_MTS_DigIO] [_attenwheel] [_foilwheel] [_attenC] [do_fs]
+   #zzyu_feb25_xyN_hydra 5 0.1 _fileName _xstart _xN 0.1 _ystart _yN 0.025 1 0 0 _att1 0 _att3 0
+    cmd=sprintf("zzyu_feb25_xyN_hydra 5 0.1 %s %.3f %d 0.1 %.3f %d 0.025 1 0 0 %d 0 %d 0",_fileName, _xstart, _xN, _ystart, _yN, _att1, _att3)
+    eval(cmd)
+}'
+
+
+def sam6_maps_200C'{
+
+
+    local _xstart _xN _dx _ystart _yN _dy _att1 _att3 _fileName _cmd
+
+    ########## Alumina Map ###########
+    
+    _fileName="VB-APS-SSAO-6_200C_Map-AO"
+
+    _xstart=1.43 # [mm]
+    _xN=4 # step number in X
+    _dx=0.2
+
+    _ystart=17.37 # [mm]
+    _yN=21 # step number in Y 
+    _dy = 0.05
+
+    _att1= 2 # attenuator 1
+    _att3= 0 # attenuator 3
+
+   # Usage: zzyu_feb25_xyN_hydra [Nframe] [tframe] [fname] [x0] [Nx] [dx] [y0] [Ny] [dy] [nLoop] [tsleep] [Use_MTS_DigIO] [_attenwheel] [_foilwheel] [_attenC] [do_fs]
+    #zzyu_feb25_xyN_hydra 5 0.1 _fileName _xstart _xN 0.1 _ystart _yN 0.025 1 0 0 _att1 0 _att3 0
+    cmd=sprintf("zzyu_feb25_xyN_hydra 5 0.1 %s %.3f %d %.2f %.3f %d %.2f 1 0 0 %d 0 %d 0",_fileName, _xstart, _xN, _dx, _ystart, _yN, _dy, _att1, _att3)
+    eval(cmd)
+    
+    ########## SS304 Map ###########
+    
+    _fileName="VB-APS-SSAO-6_200C_Map-SS"
+
+    _xstart=1.43
+    _xN=4
+    #_dx=0.2
+
+    _ystart=18.42
+    _yN=7
+    #_dy=0.05
+
+    _att1=0
+    _att3=2
+
+   # Usage: zzyu_feb25_xyN_hydra [Nframe] [tframe] [fname] [x0] [Nx] [dx] [y0] [Ny] [dy] [nLoop] [tsleep] [Use_MTS_DigIO] [_attenwheel] [_foilwheel] [_attenC] [do_fs]
+   #zzyu_feb25_xyN_hydra 5 0.1 _fileName _xstart _xN 0.1 _ystart _yN 0.025 1 0 0 _att1 0 _att3 0
+   cmd=sprintf("zzyu_feb25_xyN_hydra 5 0.1 %s %.3f %d %.2f %.3f %d %.2f 1 0 0 %d 0 %d 0",_fileName, _xstart, _xN, _dx, _ystart, _yN, _dy, _att1, _att3)
+   eval(cmd)
+}'
+
+def sam6_maps_400C'{
+
+
+    local _xstart _xN _dx _ystart _yN _dy _att1 _att3 _fileName _cmd
+
+    ########## Alumina Map ###########
+    
+    _fileName="VB-APS-SSAO-6_400C_Map-AO"
+
+    _xstart=1.43 # [mm]
+    _xN=4 # step number in X
+    _dx=0.2
+
+    _ystart=17.37 # [mm]
+    _yN=21 # step number in Y 
+    _dy = 0.05
+
+    _att1= 2 # attenuator 1
+    _att3= 0 # attenuator 3
+
+   # Usage: zzyu_feb25_xyN_hydra [Nframe] [tframe] [fname] [x0] [Nx] [dx] [y0] [Ny] [dy] [nLoop] [tsleep] [Use_MTS_DigIO] [_attenwheel] [_foilwheel] [_attenC] [do_fs]
+    #zzyu_feb25_xyN_hydra 5 0.1 _fileName _xstart _xN 0.1 _ystart _yN 0.025 1 0 0 _att1 0 _att3 0
+    cmd=sprintf("zzyu_feb25_xyN_hydra 5 0.1 %s %.3f %d %.2f %.3f %d %.2f 1 0 0 %d 0 %d 0",_fileName, _xstart, _xN, _dx, _ystart, _yN, _dy, _att1, _att3)
+    eval(cmd)
+    
+    ########## SS304 Map ###########
+    
+    _fileName="VB-APS-SSAO-6_400C_Map-SS"
+
+    _xstart=1.43
+    _xN=4
+    #_dx=0.2
+
+    _ystart=18.42
+    _yN=7
+    #_dy=0.05
+
+    _att1=0
+    _att3=2
+
+   # Usage: zzyu_feb25_xyN_hydra [Nframe] [tframe] [fname] [x0] [Nx] [dx] [y0] [Ny] [dy] [nLoop] [tsleep] [Use_MTS_DigIO] [_attenwheel] [_foilwheel] [_attenC] [do_fs]
+   #zzyu_feb25_xyN_hydra 5 0.1 _fileName _xstart _xN 0.1 _ystart _yN 0.025 1 0 0 _att1 0 _att3 0
+   cmd=sprintf("zzyu_feb25_xyN_hydra 5 0.1 %s %.3f %d %.2f %.3f %d %.2f 1 0 0 %d 0 %d 0",_fileName, _xstart, _xN, _dx, _ystart, _yN, _dy, _att1, _att3)
+   eval(cmd)
+}'
+
+
+def sam6_maps_600C'{
+
+
+    local _xstart _xN _dx _ystart _yN _dy _att1 _att3 _fileName _cmd
+
+    ########## Alumina Map ###########
+    
+    _fileName="VB-APS-SSAO-6_600C_Map-AO"
+
+    _xstart=1.43 # [mm]
+    _xN=4 # step number in X
+    _dx=0.2
+
+    _ystart=17.35 # [mm]
+    _yN=21 # step number in Y 
+    _dy = 0.05
+
+    _att1= 2 # attenuator 1
+    _att3= 0 # attenuator 3
+
+   # Usage: zzyu_feb25_xyN_hydra [Nframe] [tframe] [fname] [x0] [Nx] [dx] [y0] [Ny] [dy] [nLoop] [tsleep] [Use_MTS_DigIO] [_attenwheel] [_foilwheel] [_attenC] [do_fs]
+    #zzyu_feb25_xyN_hydra 5 0.1 _fileName _xstart _xN 0.1 _ystart _yN 0.025 1 0 0 _att1 0 _att3 0
+    cmd=sprintf("zzyu_feb25_xyN_hydra 5 0.1 %s %.3f %d %.2f %.3f %d %.2f 1 0 0 %d 0 %d 0",_fileName, _xstart, _xN, _dx, _ystart, _yN, _dy, _att1, _att3)
+    eval(cmd)
+    
+    ########## SS304 Map ###########
+    
+    _fileName="VB-APS-SSAO-6_600C_Map-SS"
+
+    _xstart=1.43
+    _xN=4
+    #_dx=0.2
+
+    _ystart=18.40
+    _yN=7
+    #_dy=0.05
+
+    _att1=0
+    _att3=2
+
+   # Usage: zzyu_feb25_xyN_hydra [Nframe] [tframe] [fname] [x0] [Nx] [dx] [y0] [Ny] [dy] [nLoop] [tsleep] [Use_MTS_DigIO] [_attenwheel] [_foilwheel] [_attenC] [do_fs]
+   #zzyu_feb25_xyN_hydra 5 0.1 _fileName _xstart _xN 0.1 _ystart _yN 0.025 1 0 0 _att1 0 _att3 0
+   cmd=sprintf("zzyu_feb25_xyN_hydra 5 0.1 %s %.3f %d %.2f %.3f %d %.2f 1 0 0 %d 0 %d 0",_fileName, _xstart, _xN, _dx, _ystart, _yN, _dy, _att1, _att3)
+   eval(cmd)
+}'
+
+
+def sam6_maps_800C'{
+
+
+    local _xstart _xN _dx _ystart _yN _dy _att1 _att3 _fileName _cmd
+
+    ########## Alumina Map ###########
+    
+    _fileName="VB-APS-SSAO-6_800C_Map-AO"
+
+    _xstart=1.43 # [mm]
+    _xN=4 # step number in X
+    _dx=0.2
+
+    _ystart=17.34 # [mm]
+    _yN=21 # step number in Y 
+    _dy = 0.05
+
+    _att1= 2 # attenuator 1
+    _att3= 0 # attenuator 3
+
+   # Usage: zzyu_feb25_xyN_hydra [Nframe] [tframe] [fname] [x0] [Nx] [dx] [y0] [Ny] [dy] [nLoop] [tsleep] [Use_MTS_DigIO] [_attenwheel] [_foilwheel] [_attenC] [do_fs]
+    #zzyu_feb25_xyN_hydra 5 0.1 _fileName _xstart _xN 0.1 _ystart _yN 0.025 1 0 0 _att1 0 _att3 0
+    cmd=sprintf("zzyu_feb25_xyN_hydra 5 0.1 %s %.3f %d %.2f %.3f %d %.2f 1 0 0 %d 0 %d 0",_fileName, _xstart, _xN, _dx, _ystart, _yN, _dy, _att1, _att3)
+    eval(cmd)
+    
+    ########## SS304 Map ###########
+    
+    _fileName="VB-APS-SSAO-6_800C_Map-SS"
+
+    _xstart=1.43
+    _xN=4
+    #_dx=0.2
+
+    _ystart=18.39
+    _yN=7
+    #_dy=0.05
+
+    _att1=0
+    _att3=2
+
+   # Usage: zzyu_feb25_xyN_hydra [Nframe] [tframe] [fname] [x0] [Nx] [dx] [y0] [Ny] [dy] [nLoop] [tsleep] [Use_MTS_DigIO] [_attenwheel] [_foilwheel] [_attenC] [do_fs]
+   #zzyu_feb25_xyN_hydra 5 0.1 _fileName _xstart _xN 0.1 _ystart _yN 0.025 1 0 0 _att1 0 _att3 0
+   cmd=sprintf("zzyu_feb25_xyN_hydra 5 0.1 %s %.3f %d %.2f %.3f %d %.2f 1 0 0 %d 0 %d 0",_fileName, _xstart, _xN, _dx, _ystart, _yN, _dy, _att1, _att3)
+   eval(cmd)
+}'
+
+def sam6_maps_600C_cool'{
+
+
+    local _xstart _xN _dx _ystart _yN _dy _att1 _att3 _fileName _cmd
+
+    ########## Alumina Map ###########
+    
+    _fileName="VB-APS-SSAO-6_600C_cool_Map-AO"
+
+    _xstart=1.43 # [mm]
+    _xN=4 # step number in X
+    _dx=0.2
+
+    _ystart=17.34 # [mm]
+    _yN=21 # step number in Y 
+    _dy = 0.05
+
+    _att1= 2 # attenuator 1
+    _att3= 0 # attenuator 3
+
+   # Usage: zzyu_feb25_xyN_hydra [Nframe] [tframe] [fname] [x0] [Nx] [dx] [y0] [Ny] [dy] [nLoop] [tsleep] [Use_MTS_DigIO] [_attenwheel] [_foilwheel] [_attenC] [do_fs]
+    #zzyu_feb25_xyN_hydra 5 0.1 _fileName _xstart _xN 0.1 _ystart _yN 0.025 1 0 0 _att1 0 _att3 0
+    cmd=sprintf("zzyu_feb25_xyN_hydra 5 0.1 %s %.3f %d %.2f %.3f %d %.2f 1 0 0 %d 0 %d 0",_fileName, _xstart, _xN, _dx, _ystart, _yN, _dy, _att1, _att3)
+    eval(cmd)
+    
+    ########## SS304 Map ###########
+    
+    _fileName="VB-APS-SSAO-6_600C_cool_Map-SS"
+
+    _xstart=1.43
+    _xN=4
+    #_dx=0.2
+
+    _ystart=18.39
+    _yN=7
+    #_dy=0.05
+
+    _att1=0
+    _att3=2
+
+   # Usage: zzyu_feb25_xyN_hydra [Nframe] [tframe] [fname] [x0] [Nx] [dx] [y0] [Ny] [dy] [nLoop] [tsleep] [Use_MTS_DigIO] [_attenwheel] [_foilwheel] [_attenC] [do_fs]
+   #zzyu_feb25_xyN_hydra 5 0.1 _fileName _xstart _xN 0.1 _ystart _yN 0.025 1 0 0 _att1 0 _att3 0
+   cmd=sprintf("zzyu_feb25_xyN_hydra 5 0.1 %s %.3f %d %.2f %.3f %d %.2f 1 0 0 %d 0 %d 0",_fileName, _xstart, _xN, _dx, _ystart, _yN, _dy, _att1, _att3)
+   eval(cmd)
+}'
+
+def sam6_maps_400C_cool'{
+
+
+    local _xstart _xN _dx _ystart _yN _dy _att1 _att3 _fileName _cmd
+
+    ########## Alumina Map ###########
+    
+    _fileName="VB-APS-SSAO-6_400C_cool_Map-AO"
+
+    _xstart=1.43 # [mm]
+    _xN=4 # step number in X
+    _dx=0.2
+
+    _ystart=17.36 # [mm]
+    _yN=21 # step number in Y 
+    _dy = 0.05
+
+    _att1= 2 # attenuator 1
+    _att3= 0 # attenuator 3
+
+   # Usage: zzyu_feb25_xyN_hydra [Nframe] [tframe] [fname] [x0] [Nx] [dx] [y0] [Ny] [dy] [nLoop] [tsleep] [Use_MTS_DigIO] [_attenwheel] [_foilwheel] [_attenC] [do_fs]
+    #zzyu_feb25_xyN_hydra 5 0.1 _fileName _xstart _xN 0.1 _ystart _yN 0.025 1 0 0 _att1 0 _att3 0
+    cmd=sprintf("zzyu_feb25_xyN_hydra 5 0.1 %s %.3f %d %.2f %.3f %d %.2f 1 0 0 %d 0 %d 0",_fileName, _xstart, _xN, _dx, _ystart, _yN, _dy, _att1, _att3)
+    eval(cmd)
+    
+    ########## SS304 Map ###########
+    
+    _fileName="VB-APS-SSAO-6_400C_cool_Map-SS"
+
+    _xstart=1.43
+    _xN=4
+    #_dx=0.2
+
+    _ystart=18.41
+    _yN=7
+    #_dy=0.05
+
+    _att1=0
+    _att3=2
+
+   # Usage: zzyu_feb25_xyN_hydra [Nframe] [tframe] [fname] [x0] [Nx] [dx] [y0] [Ny] [dy] [nLoop] [tsleep] [Use_MTS_DigIO] [_attenwheel] [_foilwheel] [_attenC] [do_fs]
+   #zzyu_feb25_xyN_hydra 5 0.1 _fileName _xstart _xN 0.1 _ystart _yN 0.025 1 0 0 _att1 0 _att3 0
+   cmd=sprintf("zzyu_feb25_xyN_hydra 5 0.1 %s %.3f %d %.2f %.3f %d %.2f 1 0 0 %d 0 %d 0",_fileName, _xstart, _xN, _dx, _ystart, _yN, _dy, _att1, _att3)
+   eval(cmd)
+}'
+
+def sam6_maps_200C_cool'{
+
+
+    local _xstart _xN _dx _ystart _yN _dy _att1 _att3 _fileName _cmd
+
+    ########## Alumina Map ###########
+    
+    _fileName="VB-APS-SSAO-6_200C_cool_Map-AO"
+
+    _xstart=1.43 # [mm]
+    _xN=4 # step number in X
+    _dx=0.2
+
+    _ystart=17.36 # [mm]
+    _yN=21 # step number in Y 
+    _dy = 0.05
+
+    _att1= 2 # attenuator 1
+    _att3= 0 # attenuator 3
+
+   # Usage: zzyu_feb25_xyN_hydra [Nframe] [tframe] [fname] [x0] [Nx] [dx] [y0] [Ny] [dy] [nLoop] [tsleep] [Use_MTS_DigIO] [_attenwheel] [_foilwheel] [_attenC] [do_fs]
+    #zzyu_feb25_xyN_hydra 5 0.1 _fileName _xstart _xN 0.1 _ystart _yN 0.025 1 0 0 _att1 0 _att3 0
+    cmd=sprintf("zzyu_feb25_xyN_hydra 5 0.1 %s %.3f %d %.2f %.3f %d %.2f 1 0 0 %d 0 %d 0",_fileName, _xstart, _xN, _dx, _ystart, _yN, _dy, _att1, _att3)
+    eval(cmd)
+    
+    ########## SS304 Map ###########
+    
+    _fileName="VB-APS-SSAO-6_200C_cool_Map-SS"
+
+    _xstart=1.43
+    _xN=4
+    #_dx=0.2
+
+    _ystart=18.41
+    _yN=7
+    #_dy=0.05
+
+    _att1=0
+    _att3=2
+
+   # Usage: zzyu_feb25_xyN_hydra [Nframe] [tframe] [fname] [x0] [Nx] [dx] [y0] [Ny] [dy] [nLoop] [tsleep] [Use_MTS_DigIO] [_attenwheel] [_foilwheel] [_attenC] [do_fs]
+   #zzyu_feb25_xyN_hydra 5 0.1 _fileName _xstart _xN 0.1 _ystart _yN 0.025 1 0 0 _att1 0 _att3 0
+   cmd=sprintf("zzyu_feb25_xyN_hydra 5 0.1 %s %.3f %d %.2f %.3f %d %.2f 1 0 0 %d 0 %d 0",_fileName, _xstart, _xN, _dx, _ystart, _yN, _dy, _att1, _att3)
+   eval(cmd)
+}'
+
+
+def sam6_maps_30C_cool'{
+
+
+    local _xstart _xN _dx _ystart _yN _dy _att1 _att3 _fileName _cmd
+
+    ########## Alumina Map ###########
+    
+    _fileName="VB-APS-SSAO-6_30C_cool_Map-AO"
+
+    _xstart=1.43 # [mm]
+    _xN=4 # step number in X
+    _dx=0.2
+
+    _ystart=17.36 # [mm]
+    _yN=21 # step number in Y 
+    _dy = 0.05
+
+    _att1= 2 # attenuator 1
+    _att3= 0 # attenuator 3
+
+   # Usage: zzyu_feb25_xyN_hydra [Nframe] [tframe] [fname] [x0] [Nx] [dx] [y0] [Ny] [dy] [nLoop] [tsleep] [Use_MTS_DigIO] [_attenwheel] [_foilwheel] [_attenC] [do_fs]
+    #zzyu_feb25_xyN_hydra 5 0.1 _fileName _xstart _xN 0.1 _ystart _yN 0.025 1 0 0 _att1 0 _att3 0
+    cmd=sprintf("zzyu_feb25_xyN_hydra 5 0.1 %s %.3f %d %.2f %.3f %d %.2f 1 0 0 %d 0 %d 0",_fileName, _xstart, _xN, _dx, _ystart, _yN, _dy, _att1, _att3)
+    eval(cmd)
+    
+    ########## SS304 Map ###########
+    
+    _fileName="VB-APS-SSAO-6_30C_cool_Map-SS"
+
+    _xstart=1.43
+    _xN=4
+    #_dx=0.2
+ 
+    _ystart=18.41
+    _yN=7
+    #_dy=0.05
+
+    _att1=0
+    _att3=2
+
+   # Usage: zzyu_feb25_xyN_hydra [Nframe] [tframe] [fname] [x0] [Nx] [dx] [y0] [Ny] [dy] [nLoop] [tsleep] [Use_MTS_DigIO] [_attenwheel] [_foilwheel] [_attenC] [do_fs]
+   #zzyu_feb25_xyN_hydra 5 0.1 _fileName _xstart _xN 0.1 _ystart _yN 0.025 1 0 0 _att1 0 _att3 0
+   cmd=sprintf("zzyu_feb25_xyN_hydra 5 0.1 %s %.3f %d %.2f %.3f %d %.2f 1 0 0 %d 0 %d 0",_fileName, _xstart, _xN, _dx, _ystart, _yN, _dy, _att1, _att3)
+   eval(cmd)
+}'
+
+def IN718_90min_maps_RmTemp'{
+
+
+    local _xstart _xN _dx _ystart _yN _dy _att1 _att3  _fileName _cmd
+
+    ########## IN718 ###########
+    
+    _fileName="IN718_90min_RmTemp_"
+
+    _xstart=-1.07 # [mm]
+    _xN=33 # step number in X
+    _dx=0.2
+
+    _ystart=16.75 # [mm]
+    _yN=21 # step number in Y 
+    _dy = 0.05
+
+    _att1= 2 # attenuator 1
+    _att3= 2 # attenuator 3
+
+   # Usage: zzyu_feb25_xyN_hydra [Nframe] [tframe] [fname] [x0] [Nx] [dx] [y0] [Ny] [dy] [nLoop] [tsleep] [Use_MTS_DigIO] [_attenwheel] [_foilwheel] [_attenC] [do_fs]
+    #zzyu_feb25_xyN_hydra 5 0.1 _fileName _xstart _xN 0.1 _ystart _yN 0.025 1 0 0 _att1 0 _att3 0
+    cmd=sprintf("zzyu_feb25_xyN_hydra 5 0.1 %s %.3f %d %.2f %.3f %d %.2f 1 0 0 %d 0 %d 0",_fileName, _xstart, _xN, _dx, _ystart, _yN, _dy, _att1, _att3)
+    eval(cmd)
+    
+    ########## SS304 Map ###########
+    
+    #_fileName="VB-APS-SSAO-6_30C_cool_Map-SS"
+
+    #_xstart=1.43
+    #_xN=4
+    #_dx=0.2
+
+    #_ystart=18.41
+    #_yN=7
+    #_dy=0.05
+
+    #_att1=0
+    #_att3=2
+
+   # Usage: zzyu_feb25_xyN_hydra [Nframe] [tframe] [fname] [x0] [Nx] [dx] [y0] [Ny] [dy] [nLoop] [tsleep] [Use_MTS_DigIO] [_attenwheel] [_foilwheel] [_attenC] [do_fs]
+   #zzyu_feb25_xyN_hydra 5 0.1 _fileName _xstart _xN 0.1 _ystart _yN 0.025 1 0 0 _att1 0 _att3 0
+   #cmd=sprintf("zzyu_feb25_xyN_hydra 5 0.1 %s %.3f %d %.2f %.3f %d %.2f 1 0 0 %d 0 %d 0",_fileName, _xstart, _xN, _dx, _ystart, _yN, _dy, _att1, _att3)
+   #eval(cmd)
+}'
+
+
+def TiMnFeNiCu1_8_map_RmTemp'{
+
+
+    local _xstart _xN _dx _ystart _yN _dy _att1 _att3 _fileName _cmd
+
+    ########## IN718 ###########
+    
+    _fileName="TiMnFeNiCu-1_8_AsCast"
+
+    _xstart=0.93 # [mm]
+    _xN=1 # step number in X
+    _dx=0.5
+
+    _ystart=1.75 # [mm]
+    _yN=11 # step number in Y 
+    _dy = 1
+
+    _att1= 0 # attenuator 1
+    _att3= 3 # attenuator 3
+
+   # Usage: zzyu_feb25_xyN_hydra [Nframe] [tframe] [fname] [x0] [Nx] [dx] [y0] [Ny] [dy] [nLoop] [tsleep] [Use_MTS_DigIO] [_attenwheel] [_foilwheel] [_attenC] [do_fs]
+    #zzyu_feb25_xyN_hydra 5 0.1 _fileName _xstart _xN 0.1 _ystart _yN 0.025 1 0 0 _att1 0 _att3 0
+    cmd=sprintf("zzyu_feb25_xyN_hydra 10 0.1 %s %.3f %d %.2f %.3f %d %.2f 1 0 0 %d 0 %d 1 -45 45 aero",_fileName, _xstart, _xN, _dx, _ystart, _yN, _dy, _att1, _att3)
+    eval(cmd)
+
+}'
+
+
+def AO_Ref_RmTemp'{
+
+
+    local _xstart _xN _dx _ystart _yN _dy _att1 _att3 _fileName _cmd
+
+    ########## IN718 ###########
+    
+    _fileName="AO_Ref_100x50"
+
+    _xstart=2.93 # [mm]
+    _xN=3 # step number in X
+    _dx=0.2
+
+    _ystart=13.75 # [mm]
+    _yN=3 # step number in Y 
+    _dy = 0.1
+
+    _att1= 2 # attenuator 1
+    _att3= 0 # attenuator 3
+
+   # Usage: zzyu_feb25_xyN_hydra [Nframe] [tframe] [fname] [x0] [Nx] [dx] [y0] [Ny] [dy] [nLoop] [tsleep] [Use_MTS_DigIO] [_attenwheel] [_foilwheel] [_attenC] [do_fs]
+    #zzyu_feb25_xyN_hydra 5 0.1 _fileName _xstart _xN 0.1 _ystart _yN 0.025 1 0 0 _att1 0 _att3 0
+    cmd=sprintf("zzyu_feb25_xyN_hydra 10 0.1 %s %.3f %d %.2f %.3f %d %.2f 1 0 0 %d 0 %d 0",_fileName, _xstart, _xN, _dx, _ystart, _yN, _dy, _att1, _att3)
+    eval(cmd)
+
+}'
+
+
+def SS_Ref_map_RmTemp'{
+
+
+    local _xstart _xN _dx _ystart _yN _dy _att1 _att3 _fileName _cmd
+
+    ########## IN718 ###########
+    
+    _fileName="SS_Ref_100x50"
+
+    _xstart=0.93 # [mm]
+    _xN=1 # step number in X
+    _dx=0.5
+
+    _ystart=15.35 # [mm]
+    _yN=11 # step number in Y 
+    _dy = 0.1
+
+    _att1= 0 # attenuator 1 
+    _att3= 1 # attenuator 3
+
+   # Usage: zzyu_feb25_xyN_hydra [Nframe] [tframe] [fname] [x0] [Nx] [dx] [y0] [Ny] [dy] [nLoop] [tsleep] [Use_MTS_DigIO] [_attenwheel] [_foilwheel] [_attenC] [do_fs]
+    #zzyu_feb25_xyN_hydra 5 0.1 _fileName _xstart _xN 0.1 _ystart _yN 0.025 1 0 0 _att1 0 _att3 0
+    cmd=sprintf("zzyu_feb25_xyN_hydra 10 0.1 %s %.3f %d %.2f %.3f %d %.2f 1 0 0 %d 0 %d 1 -45 45 aero",_fileName, _xstart, _xN, _dx, _ystart, _yN, _dy, _att1, _att3)
+    eval(cmd)
+
+}'
+
+def MnNiCu_Ref_map_RmTemp'{
+
+
+    local _xstart _xN _dx _ystart _yN _dy _att1 _att3 _fileName _cmd
+
+    ########## IN718 ###########
+    
+    _fileName="MnNiCu_Ref_100x50"
+
+    _xstart=0.93 # [mm]
+    _xN=1 # step number in X
+    _dx=0.5
+
+    _ystart=13.35 # [mm]
+    _yN=11 # step number in Y 
+    _dy = 0.1
+
+    _att1= 2 # attenuator 1
+    _att3= 0 # attenuator 3
+
+   # Usage: zzyu_feb25_xyN_hydra [Nframe] [tframe] [fname] [x0] [Nx] [dx] [y0] [Ny] [dy] [nLoop] [tsleep] [Use_MTS_DigIO] [_attenwheel] [_foilwheel] [_attenC] [do_fs]
+    #zzyu_feb25_xyN_hydra 5 0.1 _fileName _xstart _xN 0.1 _ystart _yN 0.025 1 0 0 _att1 0 _att3 0
+    cmd=sprintf("zzyu_feb25_xyN_hydra 10 0.1 %s %.3f %d %.2f %.3f %d %.2f 1 0 0 %d 0 %d 1 -45 45 aero",_fileName, _xstart, _xN, _dx, _ystart, _yN, _dy, _att1, _att3)
+    eval(cmd)
+
+}'
+
+def MnNiCu20TiC_Ref_map_RmTemp'{
+
+
+    local _xstart _xN _dx _ystart _yN _dy _att1 _att3 _fileName _cmd
+
+    ########## IN718 ###########
+    
+    _fileName="MnNiCu20TiC_Ref_100x50"
+
+    _xstart=0.93 # [mm]
+    _xN=1 # step number in X
+    _dx=0.5
+
+    _ystart=16.25 # [mm]
+    _yN=11 # step number in Y 
+    _dy = 0.1
+
+    _att1= 0 # attenuator 1
+    _att3= 1 # attenuator 3
+
+   # Usage: zzyu_feb25_xyN_hydra [Nframe] [tframe] [fname] [x0] [Nx] [dx] [y0] [Ny] [dy] [nLoop] [tsleep] [Use_MTS_DigIO] [_attenwheel] [_foilwheel] [_attenC] [do_fs]
+    #zzyu_feb25_xyN_hydra 5 0.1 _fileName _xstart _xN 0.1 _ystart _yN 0.025 1 0 0 _att1 0 _att3 0
+    cmd=sprintf("zzyu_feb25_xyN_hydra 10 0.1 %s %.3f %d %.2f %.3f %d %.2f 1 0 0 %d 0 %d 1 -45 45 aero",_fileName, _xstart, _xN, _dx, _ystart, _yN, _dy, _att1, _att3)
+    eval(cmd)
+
+}'
+
+
+def H19_0Cr_1000F_995h'{
+
+
+    local _xstart _xN _dx _ystart _yN _dy _att1 _att3 _fileName _cmd
+
+    ########## IN718 ###########
+    
+    _fileName="Ox_H19_0Cr_1000F_995h"
+
+    _xstart=1.23 # [mm]
+    _xN=11 # step number in X
+    _dx=0.1
+
+    _ystart=18.035 # [mm]
+    _yN=1 # step number in Y 
+    _dy = 0.1
+
+    _att1= 0 # attenuator 1
+    _att3= 0 # attenuator 3
+
+   # Usage: zzyu_feb25_xyN_hydra [Nframe] [tframe] [fname] [x0] [Nx] [dx] [y0] [Ny] [dy] [nLoop] [tsleep] [Use_MTS_DigIO] [_attenwheel] [_foilwheel] [_attenC] [do_fs]
+    #zzyu_feb25_xyN_hydra 5 0.1 _fileName _xstart _xN 0.1 _ystart _yN 0.025 1 0 0 _att1 0 _att3 0
+    cmd=sprintf("zzyu_feb25_xyN_hydra 10 0.1 %s %.3f %d %.2f %.3f %d %.2f 1 0 0 %d 0 %d 1 -45 45 aero",_fileName, _xstart, _xN, _dx, _ystart, _yN, _dy, _att1, _att3)
+    eval(cmd)
+
+}'
+
+
+def H2Aric_0Cr_1000F_995h'{
+
+
+    local _xstart _xN _dx _ystart _yN _dy _att1 _att3 _fileName _cmd
+
+    ########## IN718 ###########
+    
+    _fileName="Ox_H2_Aric_0Cr_1000F_995h_0p2Exp"
+
+    _xstart=0.73 # [mm]
+    _xN=11 # step number in X
+    _dx=0.1
+
+    _ystart=18.840 # [mm]
+    _yN=1 # step number in Y 
+    _dy = 0.1
+
+    _att1= 0 # attenuator 1
+    _att3= 0 # attenuator 3
+
+   # Usage: zzyu_feb25_xyN_hydra [Nframe] [tframe] [fname] [x0] [Nx] [dx] [y0] [Ny] [dy] [nLoop] [tsleep] [Use_MTS_DigIO] [_attenwheel] [_foilwheel] [_attenC] [do_fs]
+    #zzyu_feb25_xyN_hydra 5 0.1 _fileName _xstart _xN 0.1 _ystart _yN 0.025 1 0 0 _att1 0 _att3 0
+    cmd=sprintf("zzyu_feb25_xyN_hydra 10 0.2 %s %.3f %d %.2f %.3f %d %.2f 1 0 0 %d 0 %d 1 -45 45 aero",_fileName, _xstart, _xN, _dx, _ystart, _yN, _dy, _att1, _att3)
+    eval(cmd)
+
+}'
+
+def H19_0Cr_1200F_135h'{
+
+
+    local _xstart _xN _dx _ystart _yN _dy _att1 _att3 _fileName _cmd
+
+    ########## IN718 ########### 
+    
+    _fileName="Ox_H19_0Cr_1200F_135h_0p2Exp"
+
+    _xstart=1.23 # [mm]
+    _xN=11 # step number in X
+    _dx=0.1
+
+    _ystart=18.029 # [mm]
+    _yN=1 # step number in Y 
+    _dy = 0.1
+
+    _att1= 0 # attenuator 1
+    _att3= 0 # attenuator 3
+
+   # Usage: zzyu_feb25_xyN_hydra [Nframe] [tframe] [fname] [x0] [Nx] [dx] [y0] [Ny] [dy] [nLoop] [tsleep] [Use_MTS_DigIO] [_attenwheel] [_foilwheel] [_attenC] [do_fs]
+    #zzyu_feb25_xyN_hydra 5 0.1 _fileName _xstart _xN 0.1 _ystart _yN 0.025 1 0 0 _att1 0 _att3 0
+    cmd=sprintf("zzyu_feb25_xyN_hydra 10 0.2 %s %.3f %d %.2f %.3f %d %.2f 1 0 0 %d 0 %d 1 -45 45 aero",_fileName, _xstart, _xN, _dx, _ystart, _yN, _dy, _att1, _att3)
+    eval(cmd)
+
+}'
+
+def H24_6Cr_1200F_135h'{ 
+
+ 
+    local _xstart _xN _dx _ystart _yN _dy _att1 _att3 _fileName _cmd
+
+    ########## IN718 ###########
+    
+    _fileName="Ox_H24_6Cr_1200F_135h_0p2Exp"
+
+    _xstart=1.23 # [mm]
+    _xN=11 # step number in X
+    _dx=0.1
+
+    _ystart=18.089 # [mm]
+    _yN=1 # step number in Y 
+    _dy = 0.1
+
+    _att1= 0 # attenuator 1
+    _att3= 0 # attenuator 3
+
+   # Usage: zzyu_feb25_xyN_hydra [Nframe] [tframe] [fname] [x0] [Nx] [dx] [y0] [Ny] [dy] [nLoop] [tsleep] [Use_MTS_DigIO] [_attenwheel] [_foilwheel] [_attenC] [do_fs]
+    #zzyu_feb25_xyN_hydra 5 0.1 _fileName _xstart _xN 0.1 _ystart _yN 0.025 1 0 0 _att1 0 _att3 0
+    cmd=sprintf("zzyu_feb25_xyN_hydra 10 0.2 %s %.3f %d %.2f %.3f %d %.2f 1 0 0 %d 0 %d 1 -45 45 aero",_fileName, _xstart, _xN, _dx, _ystart, _yN, _dy, _att1, _att3)
+    eval(cmd)
+
+}'
+
+
+def H25_10Cr_1200F_135h'{
+
+
+    local _xstart _xN _dx _ystart _yN _dy _att1 _att3 _fileName _cmd
+
+    ########## IN718 ###########
+    
+    _fileName="Ox_H25_10Cr_1200F_135h_0p2Exp"
+
+    _xstart=1.23 # [mm]
+    _xN=11 # step number in X
+    _dx=0.1
+
+    _ystart=18.334 # [mm]
+    _yN=1 # step number in Y 
+    _dy = 0.1
+
+    _att1= 0 # attenuator 1
+    _att3= 0 # attenuator 3
+
+   # Usage: zzyu_feb25_xyN_hydra [Nframe] [tframe] [fname] [x0] [Nx] [dx] [y0] [Ny] [dy] [nLoop] [tsleep] [Use_MTS_DigIO] [_attenwheel] [_foilwheel] [_attenC] [do_fs]
+    #zzyu_feb25_xyN_hydra 5 0.1 _fileName _xstart _xN 0.1 _ystart _yN 0.025 1 0 0 _att1 0 _att3 0
+    cmd=sprintf("zzyu_feb25_xyN_hydra 10 0.2 %s %.3f %d %.2f %.3f %d %.2f 1 0 0 %d 0 %d 1 -45 45 aero",_fileName, _xstart, _xN, _dx, _ystart, _yN, _dy, _att1, _att3)
+    eval(cmd)
+
+}'
+
+def MnNiCu_20TiC_Powder'{
+
+
+    local _xstart _xN _dx _ystart _yN _dy _att1 _att3 _fileName _cmd
+
+    ########## IN718 ###########
+    
+    _fileName="MnNiCu_20TiC_Powder"
+
+    _xstart=-0.77 # [mm]
+    _xN=1 # step number in X
+    _dx=0.1
+
+    _ystart=17.734 # [mm]
+    _yN=1 # step number in Y 
+    _dy = 0.1
+
+    _att1= 0 # attenuator 1
+    _att3= 0 # attenuator 3
+
+   # Usage: zzyu_feb25_xyN_hydra [Nframe] [tframe] [fname] [x0] [Nx] [dx] [y0] [Ny] [dy] [nLoop] [tsleep] [Use_MTS_DigIO] [_attenwheel] [_foilwheel] [_attenC] [do_fs]
+    #zzyu_feb25_xyN_hydra 5 0.1 _fileName _xstart _xN 0.1 _ystart _yN 0.025 1 0 0 _att1 0 _att3 0
+    cmd=sprintf("zzyu_feb25_xyN_hydra 10 0.2 %s %.3f %d %.2f %.3f %d %.2f 1 0 0 %d 0 %d 0",_fileName, _xstart, _xN, _dx, _ystart, _yN, _dy, _att1, _att3)
+    eval(cmd)
+
+}'
+
+def TiMnFeNiCu_Powder'{
+
+
+    local _xstart _xN _dx _ystart _yN _dy _att1 _att3 _fileName _cmd
+
+    ########## IN718 ###########
+    
+    _fileName="TiMnFeNiCu_Powder"
+
+    _xstart=4.23 # [mm]
+    _xN=1 # step number in X
+    _dx=0.1
+
+    _ystart=17.934 # [mm]
+    _yN=1 # step number in Y 
+    _dy = 0.1
+
+    _att1= 0 # attenuator 1
+    _att3= 0 # attenuator 3
+
+   # Usage: zzyu_feb25_xyN_hydra [Nframe] [tframe] [fname] [x0] [Nx] [dx] [y0] [Ny] [dy] [nLoop] [tsleep] [Use_MTS_DigIO] [_attenwheel] [_foilwheel] [_attenC] [do_fs]
+    #zzyu_feb25_xyN_hydra 5 0.1 _fileName _xstart _xN 0.1 _ystart _yN 0.025 1 0 0 _att1 0 _att3 0
+    cmd=sprintf("zzyu_feb25_xyN_hydra 10 0.2 %s %.3f %d %.2f %.3f %d %.2f 1 0 0 %d 0 %d 0",_fileName, _xstart, _xN, _dx, _ystart, _yN, _dy, _att1, _att3)
+    eval(cmd)
+
+}'
+
+def sam7_map_30C'{
+
+
+    local _xstart _xN _dx _ystart _yN _dy _att1 _att3 _fileName _cmd
+
+    ########## IN718 ###########
+    
+    _fileName="sam7_map_30C"
+
+    _xstart=1.83 # [mm]
+    _xN=4 # step number in X
+    _dx=0.1
+
+    _ystart=18.609 # [mm]
+    _yN=5 # step number in Y 
+    _dy = 0.025
+
+    _att1= 0 # attenuator 1
+    _att3= 2 # attenuator 3
+
+   # Usage: zzyu_feb25_xyN_hydra [Nframe] [tframe] [fname] [x0] [Nx] [dx] [y0] [Ny] [dy] [nLoop] [tsleep] [Use_MTS_DigIO] [_attenwheel] [_foilwheel] [_attenC] [do_fs]
+    #zzyu_feb25_xyN_hydra 5 0.1 _fileName _xstart _xN 0.1 _ystart _yN 0.025 1 0 0 _att1 0 _att3 0
+    cmd=sprintf("zzyu_feb25_xyN_hydra 10 0.2 %s %.3f %d %.2f %.3f %d %.2f 1 0 0 %d 0 %d 0",_fileName, _xstart, _xN, _dx, _ystart, _yN, _dy, _att1, _att3)
+    eval(cmd)
+
+}'
+
+def sam7_map_800C'{
+
+
+    local _xstart _xN _dx _ystart _yN _dy _att1 _att3 _fileName _cmd
+
+    ########## IN718 ###########
+    
+    _fileName="sam7_map_800C"
+
+    _xstart=1.83 # [mm]
+    _xN=4 # step number in X
+    _dx=0.1
+
+    _ystart=18.579 # [mm]
+    _yN=5 # step number in Y 
+    _dy = 0.025
+
+    _att1= 0 # attenuator 1
+    _att3= 2 # attenuator 3
+
+   # Usage: zzyu_feb25_xyN_hydra [Nframe] [tframe] [fname] [x0] [Nx] [dx] [y0] [Ny] [dy] [nLoop] [tsleep] [Use_MTS_DigIO] [_attenwheel] [_foilwheel] [_attenC] [do_fs]
+    #zzyu_feb25_xyN_hydra 5 0.1 _fileName _xstart _xN 0.1 _ystart _yN 0.025 1 0 0 _att1 0 _att3 0
+    cmd=sprintf("zzyu_feb25_xyN_hydra 10 0.2 %s %.3f %d %.2f %.3f %d %.2f 1 0 0 %d 0 %d 0",_fileName, _xstart, _xN, _dx, _ystart, _yN, _dy, _att1, _att3)
+    eval(cmd)
+
+}'
+
+    ################ Line for In-Situ Measurement ######################
+    #zzyu_feb25_expose 5 0.1 sam11_spot_contCooling_r5c3_T30
+    
+    
+def sam7_map_30C_cooling'{
+
+
+    local _xstart _xN _dx _ystart _yN _dy _att1 _att3 _fileName _cmd
+
+    ########## IN718 ###########
+    
+    _fileName="sam7_map_30C_cooling"
+
+    _xstart=1.83 # [mm]
+    _xN=4 # step number in X
+    _dx=0.1
+
+    _ystart=18.609 # [mm]
+    _yN=5 # step number in Y 
+    _dy = 0.025
+
+    _att1= 0 # attenuator 1
+    _att3= 2 # attenuator 3
+
+   # Usage: zzyu_feb25_xyN_hydra [Nframe] [tframe] [fname] [x0] [Nx] [dx] [y0] [Ny] [dy] [nLoop] [tsleep] [Use_MTS_DigIO] [_attenwheel] [_foilwheel] [_attenC] [do_fs]
+    #zzyu_feb25_xyN_hydra 5 0.1 _fileName _xstart _xN 0.1 _ystart _yN 0.025 1 0 0 _att1 0 _att3 0
+    cmd=sprintf("zzyu_feb25_xyN_hydra 10 0.2 %s %.3f %d %.2f %.3f %d %.2f 1 0 0 %d 0 %d 0",_fileName, _xstart, _xN, _dx, _ystart, _yN, _dy, _att1, _att3)
+    eval(cmd)
+
+}'
+
+
+def sam11_map_30C'{
+
+
+    local _xstart _xN _dx _ystart _yN _dy _att1 _att3 _fileName _cmd
+
+    ########## IN718 ###########
+    
+    _fileName="sam11_map_30C"
+
+    _xstart=1.23 # [mm]
+    _xN=5 # step number in X
+    _dx=0.1
+
+    _ystart=18.62 # [mm]
+    _yN=1 # step number in Y 
+    _dy = 0.025
+
+    _att1= 0 # attenuator 1
+    _att3= 2 # attenuator 3
+
+   # Usage: zzyu_feb25_xyN_hydra [Nframe] [tframe] [fname] [x0] [Nx] [dx] [y0] [Ny] [dy] [nLoop] [tsleep] [Use_MTS_DigIO] [_attenwheel] [_foilwheel] [_attenC] [do_fs]
+    #zzyu_feb25_xyN_hydra 5 0.1 _fileName _xstart _xN 0.1 _ystart _yN 0.025 1 0 0 _att1 0 _att3 0
+    cmd=sprintf("zzyu_feb25_xyN_hydra 10 0.2 %s %.3f %d %.2f %.3f %d %.2f 1 0 0 %d 0 %d 0",_fileName, _xstart, _xN, _dx, _ystart, _yN, _dy, _att1, _att3)
+    eval(cmd)
+
+}'
+
+def sam11_map_800C'{
+
+
+    local _xstart _xN _dx _ystart _yN _dy _att1 _att3 _fileName _cmd
+
+    ########## IN718 ###########
+    
+    _fileName="sam11_map_800C_correctLoc"
+
+    _xstart=1.23 # [mm]
+    _xN=5 # step number in X
+    _dx=0.1
+
+    _ystart=18.59 # [mm]
+    _yN=1 # step number in Y 
+    _dy = 0.025
+
+    _att1= 0 # attenuator 1
+    _att3= 2 # attenuator 3
+
+   # Usage: zzyu_feb25_xyN_hydra [Nframe] [tframe] [fname] [x0] [Nx] [dx] [y0] [Ny] [dy] [nLoop] [tsleep] [Use_MTS_DigIO] [_attenwheel] [_foilwheel] [_attenC] [do_fs]
+    #zzyu_feb25_xyN_hydra 5 0.1 _fileName _xstart _xN 0.1 _ystart _yN 0.025 1 0 0 _att1 0 _att3 0
+    cmd=sprintf("zzyu_feb25_xyN_hydra 10 0.2 %s %.3f %d %.2f %.3f %d %.2f 1 0 0 %d 0 %d 0",_fileName, _xstart, _xN, _dx, _ystart, _yN, _dy, _att1, _att3)
+    eval(cmd)
+
+}'
+
+
+def sam11_map_30C_cool'{
+
+
+    local _xstart _xN _dx _ystart _yN _dy _att1 _att3 _fileName _cmd
+
+    ########## IN718 ###########
+    
+    _fileName="sam11_map_30C_cool"
+
+    _xstart=1.23 # [mm]
+    _xN=5 # step number in X
+    _dx=0.1
+
+    _ystart=18.62 # [mm]
+    _yN=1 # step number in Y 
+    _dy = 0.025
+
+    _att1= 0 # attenuator 1
+    _att3= 2 # attenuator 3
+
+   # Usage: zzyu_feb25_xyN_hydra [Nframe] [tframe] [fname] [x0] [Nx] [dx] [y0] [Ny] [dy] [nLoop] [tsleep] [Use_MTS_DigIO] [_attenwheel] [_foilwheel] [_attenC] [do_fs]
+    #zzyu_feb25_xyN_hydra 5 0.1 _fileName _xstart _xN 0.1 _ystart _yN 0.025 1 0 0 _att1 0 _att3 0
+    cmd=sprintf("zzyu_feb25_xyN_hydra 10 0.2 %s %.3f %d %.2f %.3f %d %.2f 1 0 0 %d 0 %d 0",_fileName, _xstart, _xN, _dx, _ystart, _yN, _dy, _att1, _att3)
+    eval(cmd)
+
+}'
+
+def sam12_map_30C'{
+
+
+    local _xstart _xN _dx _ystart _yN _dy _att1 _att3 _fileName _cmd
+
+    ########## IN718 ###########
+    
+    _fileName="sam12_map_30C"
+
+    _xstart=1.68 # [mm]
+    _xN=5 # step number in X
+    _dx=0.1
+
+    _ystart=18.67 # [mm]
+    _yN=1 # step number in Y 
+    _dy = 0.025
+
+    _att1= 0 # attenuator 1
+    _att3= 1 # attenuator 3
+
+   # Usage: zzyu_feb25_xyN_hydra [Nframe] [tframe] [fname] [x0] [Nx] [dx] [y0] [Ny] [dy] [nLoop] [tsleep] [Use_MTS_DigIO] [_attenwheel] [_foilwheel] [_attenC] [do_fs]
+    #zzyu_feb25_xyN_hydra 5 0.1 _fileName _xstart _xN 0.1 _ystart _yN 0.025 1 0 0 _att1 0 _att3 0
+    cmd=sprintf("zzyu_feb25_xyN_hydra 10 0.2 %s %.3f %d %.2f %.3f %d %.2f 1 0 0 %d 0 %d 0",_fileName, _xstart, _xN, _dx, _ystart, _yN, _dy, _att1, _att3)
+    eval(cmd)
+
+}'
+
+def sam12_map_800C'{
+
+
+    local _xstart _xN _dx _ystart _yN _dy _att1 _att3 _fileName _cmd
+
+    ########## IN718 ###########
+    
+    _fileName="sam12_map_800C"
+
+    _xstart=1.68 # [mm]
+    _xN=5 # step number in X
+    _dx=0.1
+
+    _ystart=18.64 # [mm]
+    _yN=1 # step number in Y 
+    _dy = 0.025
+
+    _att1= 0 # attenuator 1
+    _att3= 1 # attenuator 3
+
+   # Usage: zzyu_feb25_xyN_hydra [Nframe] [tframe] [fname] [x0] [Nx] [dx] [y0] [Ny] [dy] [nLoop] [tsleep] [Use_MTS_DigIO] [_attenwheel] [_foilwheel] [_attenC] [do_fs]
+    #zzyu_feb25_xyN_hydra 5 0.1 _fileName _xstart _xN 0.1 _ystart _yN 0.025 1 0 0 _att1 0 _att3 0
+    cmd=sprintf("zzyu_feb25_xyN_hydra 10 0.2 %s %.3f %d %.2f %.3f %d %.2f 1 0 0 %d 0 %d 0",_fileName, _xstart, _xN, _dx, _ystart, _yN, _dy, _att1, _att3)
+    eval(cmd)
+
+}'
+
+
+def H233_10Cr_1200C_15min'{
+
+
+    local _xstart _xN _dx _ystart _yN _dy _att1 _att3 _fileName _cmd
+
+    ########## IN718 ###########
+    
+    _fileName="H233_10Cr_1200C_15min"
+
+    _xstart=-1.655 # [mm]
+    _xN=31 # step number in X
+    _dx=0.025
+
+    _ystart=13.37 # [mm]
+    _yN=31 # step number in Y 
+    _dy = 0.2
+
+    _att1= 0 # attenuator 1
+    _att3= 2 # attenuator 3
+
+   # Usage: zzyu_feb25_xyN_hydra [Nframe] [tframe] [fname] [x0] [Nx] [dx] [y0] [Ny] [dy] [nLoop] [tsleep] [Use_MTS_DigIO] [_attenwheel] [_foilwheel] [_attenC] [do_fs]
+    #zzyu_feb25_xyN_hydra 5 0.1 _fileName _xstart _xN 0.1 _ystart _yN 0.025 1 0 0 _att1 0 _att3 0
+    cmd=sprintf("zzyu_feb25_xyN_hydra 5 0.1 %s %.3f %d %.2f %.3f %d %.2f 1 0 0 %d 0 %d 0",_fileName, _xstart, _xN, _dx, _ystart, _yN, _dy, _att1, _att3)
+    eval(cmd)
+
+}'
+
+
+
+def dummy1_ff '{ 
+    sendemailalert2("FF scans are starting. $0")   
+    local _ymid _ytop _ybot _ystp _nlay
+    local _bot_tens _top_tens _ncycles
+    
+    move_cork_in
+    
+    remove_cmu_furnace
+
+    #### FF 
+    switch_to_FFDet
+    # switch_to_Pilatus
+
+    switch_to_HxV_beam 1.7 0.5
+    # switch_to_FocusedBeam_200um
+    # switch_to_HxV_beam 1.7 -_ystpokay
+    # switch_to_HxV_beam 2.3 0.07
+
+    Sopen
+    
+    ### REFERENCE POSITION
+    umv rxe 0.000
+    umv rze 0.000
+    umv samXE 0.410 ## CHECK: center position 
+    umv samZE 0.298 ##
+    umv samYE 3.260 ## 
+    umv aeroXE 0.0
+    
+    # umv rams3X 0.0
+    # umv rams3Y 0.204
+
+    ########################################################
+    #### FF MOTION PARAMETERS
+    ########################################################
+    _ystp=0.2   ## may be negative steps  
+    _ymid=A[samYE]   ## CHECK:  Yref
+    # _ymid=A[rams3Y]   ## CHECK:  Yref
+    _nlay=1        ## CHECK: number of layers # 54% of yield
+    ###############################################
+    ## Symmetric nlay (odd) layers around middle layer 
+    # _ybot=_ymid - (_nlay-1)/2*_ystp; # _nlay layers
+    # _ytop=_ybot + (_nlay-1)*_ystp + _ystp/2; # _nlay layers
+    ###############################################
+    ## Starting from top and going to botton nlay layers
+    _ybot=_ymid # _nlay layers
+    _ytop=_ybot + (_nlay-1)*_ystp + _ystp/2; # _nlay layers
+    ###############################################
+
+    p "_ybot=", _ybot, "_ytop=", _ytop
+    
+    Emon
+    set_hydra_AutoStoreYes
+    set_hydra_FileName "$0"
+
+    #switch_to_FocusedBeam_1700um
+    # switch_to_FocusedBeam_2100um
+    # switch_to_HxV_beam 1.7 0.05
+    # focusing_E_Vert_insert
+        
+    # REPEAT WITH 0.02 sec exposure time
+    # 0.25 deg / 72 keV
+    # ge_linescan_hydra _ybot _ytop _ystp 0.02 4 0 2 "$0" 0 0 0 0.25 1 -180.0 360.0 
+    
+    ## 0.25 deg / 52 keV / HRM
+    # ge_linescan_hydra _ybot _ytop _ystp 0.02 3 0 0 "$0" 0 0 0 0.25 1 -180.0 360.0
+    
+    ## 0.25 deg / 72 keV / HEM
+    ge_linescan_hydra _ybot _ytop _ystp 0.02 4 0 2 "$0" 0 0 0 0.25 1 -180.0 360.0  
+
+    # 0.25 deg / 91 keV
+    # "Usage: $0 [_ystart] [_yend] [_ystep] [_tint] [_attenwheel] [_foilwheel] [_attenC] [_fname] [_useMTSSIG] [_dicangle] [_dicheight] [qt] [_numloadsteps] [omestart] [omerange]"
+    # ge_linescan_hydra _ybot _ytop _ystp 0.02 2 0 4 "$0" 0 0 0 0.25 1 -180.0 360.0
+
+    ########################################################
+    sendemailalert2("FF scans are done. $0")
+}'
+
+## set_hydra_FileName test_Si_att304_p6p97_0p001deg ; Atten 3 0 4; fastsweep aero 6.95 6.97 20 0.02 ; DataMoveHydra
+
+def test_1idSP1_fly '{
+    sendemailalert2("Tomo scans starting. $0")
+    local exptime _nframe _nlayer
+	
+    ###
+    #switch_to_NFTomoDet
+    #switch_to_TomoDet
+    #switch_to_TomoBeam # 2.1 x 1.0
+    # switch_to_HxV_beam 0.3 0.07
+    ###
+    #Sopen
+
+     ### Measurement Position (w-pin position)
+    #umv rxe 0.0 rze 0.0
+    #umv samXE -1.26 samZE 0.016
+    #umv samYE 9.4
+
+    umv aeroXE 0.0
+
+    ### Exposure time
+    exptime=0.15;  ## 80 keV
+
+    _nframe=1;
+    _nlayer=1;    # layer thickness is 1mm.
+    ShouldRotateBack=0
+    
+    unix(sprintf("mkdir -p /home/beams/S1IDUSER/mnt/s1c/%s/tomo/%s", EXPID, "$0"))
+    ccdset_filepath(sprintf("/home/beams/S1IDUSER/mnt/s1c/%s/tomo", EXPID)) # LINUX
+    #ccdset_filepath(sprintf("S:/%s/tomo", EXPID))  # WIN
+    
+    CheckLightsEhutch
+    # TomoVolScan(bScanType, fOmegaBegin, fOmegaStop, fOmegaStep, fExposureTime, sPrefix, nframe, stagestep, nstage, nsamY, samYstep) 
+    # DEFAULT_GAP_TIME = 0.3
+    
+    TomoVolScan(3, -180, -170, 0.1, exptime, "$0/$0", _nframe, 0.0, 1, _nlayer, 1.0)
+    #TomoVolScan(1, -180, -170, 0.1, exptime, "$0/$0", _nframe, 0.0, 1, _nlayer, 1.0)
+
+    sendemailalert2("Tomo scans are done. $0")
+}'
+
+
+# Center point
+def MonoCryst1 '{
+    local exptime _nframe _nlayer _sPrefix
+	
+    Sopen
+    
+    #note switch_to_FFDet4 moves aeroXE
+    #switch_to_FFDet4
+    
+    # Measurement Position (Check)
+    umv samXE -0.694 samZE 1.11 rxe -0.4 rze 0.0
+    umv samYE  14.42
+
+    umv aeroXE 4.9138
+    
+    #should be same as switch_to_FFDet4
+    #C_slits 0.130 0.130 0.175 0.160 -0.072 0.155 -0.121 0.140
+    E_slits 0.1 0.1 0.2 0.2 -0.023 0.019 -0.029 0.047
+   
+    ge_linescan_hydra_raster 14.42 14.42+0.1 8.0 0.02 0 0 3 "$0" 0 0 0 0.001 1 6.963-0.05 0.1 -0.694 8.0 1 0
+    
+
+}'
+
+# Whole raster
+def MonoCryst2 '{
+    local exptime _nframe _nlayer _sPrefix
+	
+    Sopen
+    
+    #note switch_to_FFDet4 moves aeroXE
+    #switch_to_FFDet4
+    
+    # Measurement Position (Check)
+    umv samXE -0.694 samZE 1.11 rxe -0.4 rze 0.0
+    umv samYE  14.42
+
+    umv aeroXE 4.9138
+    
+    #should be same as switch_to_FFDet4
+    #C_slits 0.130 0.130 0.175 0.160 -0.072 0.155 -0.121 0.140
+    E_slits 0.1 0.1 0.2 0.2 -0.023 0.019 -0.029 0.047
+   
+    ge_linescan_hydra_raster 14.42-8 14.42+8 4.0 0.02 0 0 3 "$0" 0 0 0 0.002 1 6.963-0.05 0.1 -0.694 4.0 5 0
+    
+
+}'
+
+def HPDC1 '{
+
+    local _xstart _Nx _xstep _ystart _Ny _ystep _exptime _fname
+    
+    switch_to_HxV_beam 0.1 0.2
+    
+    _exptime=0.2
+    _fname="$0"
+    _xstart=-3.45
+    _ystart=7.1     # 9mm from edge.
+    _Nx=27
+    _Ny=30
+    _xstep=0.1
+    _ystep=0.1
+
+    #Usage: mpe_dec24_xyN_varex [Nframe] [tframe] [fname] [x0] [Nx] [dx] [y0] [Ny] [dy] [nLoop] [tsleep] [_foilwheel] [_attenwheel] [_attenC]
+    #mpe_dec24_xyN_varex 5 _exptime _fname _xstart _Nx _xstep _ystart _Ny _ystep 1 0 0 0 0
+    cmd=sprintf("mpe_dec24_xyN_varex 5 %.3f %s %.3f %d %.3f %.3f %d %.3f 1 0 0 0 0",_exptime, _fname, _xstart, _Nx, _xstep, _ystart, _Ny, _ystep)
+    #p cmd
+    eval(cmd)
+    
+    DataMoveVarex EXPID
+
+}'
+
+def HPDC_air_0p2s '{
+
+    local _xstart _Nx _xstep _ystart _Ny _ystep _exptime _fname
+    
+    switch_to_HxV_beam 0.1 0.2
+    
+    _exptime=0.2
+    _fname="$0"
+    _xstart=-2.8
+    _ystart=3.1     # 10mm from edge.
+    _Nx=1
+    _Ny=1
+    _xstep=0.1
+    _ystep=0.2
+
+    #Usage: mpe_dec24_xyN_varex [Nframe] [tframe] [fname] [x0] [Nx] [dx] [y0] [Ny] [dy] [nLoop] [tsleep] [_foilwheel] [_attenwheel] [_attenC]
+    #mpe_dec24_xyN_varex 5 _exptime _fname _xstart _Nx _xstep _ystart _Ny _ystep 1 0 0 0 0
+    cmd=sprintf("mpe_dec24_xyN_varex 50 %.3f %s %.3f %d %.3f %.3f %d %.3f 1 0 0 0 0",_exptime, _fname, _xstart, _Nx, _xstep, _ystart, _Ny, _ystep)
+    #p cmd
+    eval(cmd)
+    
+    DataMoveVarex EXPID
+
+}'
+
+
+
+def tomo_template '{
+    sendemailalert2("Tomo scans starting. $0")
+	local exptime _nframe _nlayer
+	
+	###
+    #switch_to_NFTomoDet
+    switch_to_TomoDet
+    switch_to_TomoBeam # 2.1 x 1.0
+    # switch_to_HxV_beam 0.3 0.07
+    ###
+    Sopen
+
+     ### Measurement Position (Check)
+    umv rxe 0.68 rze -0.45
+    umv samXE 0.92 samZE 1.34
+    umv samYE 1.98  ## sample center is 5.4
+
+    umv aeroXE 0.0
+
+    ### Exposure time
+    exptime=0.4;  ## 72 keV
+
+    _nframe=1;
+    _nlayer=1;    # layer thickness is 1mm.
+    ShouldRotateBack=0
+    
+    unix(sprintf("mkdir -p /home/beams/S1IDUSER/mnt/s1c/%s/tomo/%s", EXPID, "$0"))
+    # ccdset_filepath(sprintf("/home/beams/S1IDUSER/mnt/s1c/%s/tomo", EXPID)) # LINUX
+    ccdset_filepath(sprintf("S:/%s/tomo", EXPID))  # WIN
+    
+	CheckLightsEhutch
+	# TomoVolScan(bScanType, fOmegaBegin, fOmegaStop, fOmegaStep, fExposureTime, sPrefix, nframe, stagestep, nstage, nsamY, samYstep) 
+	# DEFAULT_GAP_TIME = 0.3
+    
+    TomoVolScan(3, -180, 180, 0.1, exptime, "$0/$0", _nframe, 0.0, 1, _nlayer, 1.0)
+
+    sendemailalert2("Tomo scans are done. $0")
+}'
+
+
+
+#########################################################################
+### TO DO TOMOGRAPHY 
+### switch to tomo det and beam commands
+### umv aeroXE 0; 
+### DEFAULT_GAP_TIME=0.2; TomoScan( 3, -180, 180, 0.2, 0.18, "testing")
+###       Check TomoScan for that which stage is used for moving out the sample!!!!
+###       It assumes that the stage is at the center at the beginning!!!
+###       Rotation axis motion: aeroXE  volume motor: samYE
+       
+########################################################################
+

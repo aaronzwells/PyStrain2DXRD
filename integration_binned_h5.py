@@ -7,7 +7,7 @@
     - pyFAI essentialls are borrowed from Aaron's Script 2 and/or function library
 
     - This version unlikely to yield individual data files for easy user viewing (although we could, but is this just clutter?)... 
-    retain Aaron's original script for that. Update: Andrew's viewer makes this largely irrelevant
+    retain Aaron's original script for that. Update: Andrew's viewer makes this largely (totally?) irrelevant
 """
 
 import FunctionLibrary as fl
@@ -29,26 +29,26 @@ import h5py
 ########### CALIBRATION PARAMETERS #####################
 
 #FEBRUARY 2025 BEAMTIME CALIBRATION PARAMETERS (BEN): 
-poni_file = "0_calibration/Calibration_Feb25_ceria_1145mm_25C_att000_000112.poni" # calibration PONI file. Ben used CeO2
-detector_type = "GE" # "Pilatus" or "GE"
-mask_file = None
-visit = "Feb2025" #Subfolder to separate full cake results by visit.
-#Note: local_folder = "/Users/benjaminschneiderman/APS_Data_Local/APS_2025-02/InputFiles"
+# poni_file = "0_calibration/Calibration_Feb25_ceria_1145mm_25C_att000_000112.poni" # calibration PONI file. Ben used CeO2
+# detector_type = "GE" # "Pilatus" or "GE"
+# mask_file = None
+# visit = "Feb2025" #Subfolder to separate full cake results by visit.
+#Note: local_folder = "/Users/benjaminschneiderman/APS_Data_Local/APS_2025-02/InputFiles". (SET BELOW!)
 
 #OCTOBER 2025 BEAMTIME CALIBRATION PARAMETERS: 
-# poni_file = "0_calibration/Calibration_Oct25_ceria_900mm_linkam_30C_att000_0006091.poni" # calibration PONI file. I used CeO2 
-# detector_type = "Pilatus" # "Pilatus" or "GE"
-# mask_file = "0_calibration/pilatus_mask.msk" # Either "path/to/your/mask.tif" or None
-# visit = "Oct2025"
-# Note: local_folder = "/Users/benjaminschneiderman/APS_Data_Local/APS_2025-10/pilatus"
+poni_file = "0_calibration/Calibration_Oct25_ceria_900mm_linkam_30C_att000_0006091.poni" # calibration PONI file. I used CeO2 
+detector_type = "Pilatus" # "Pilatus" or "GE"
+mask_file = "0_calibration/pilatus_mask.msk" # Either "path/to/your/mask.tif" or None
+visit = "Oct2025"
+# Note: local_folder = "/Users/benjaminschneiderman/APS_Data_Local/APS_2025-10/pilatus". (SET BELOW!)
 
 ########################################################
 
 #Parameters for the map scan you will package into a single hdf5
-local_folder = "/Users/benjaminschneiderman/APS_Data_Local/APS_2025-02/InputFiles" #Point to local storage to avoid cluttering OneDrive
-isolated_mapscan_location = "Feb2025_OnCool_30C" #Grouping the maps for organization
-beamtime_given_prefix = "VB-APS-SSAO-6_30C_cool_Map-AO_"
-scan_range = (1448, 1531) #Beamtime assigned scan IDs
+local_folder = "/Users/benjaminschneiderman/APS_Data_Local/APS_2025-10/pilatus" #Point to local storage to avoid cluttering OneDrive
+isolated_mapscan_location = "ceria_900mm_linkam_30C_att000" #Grouping the maps for organization
+beamtime_given_prefix = "ceria_900mm_linkam_30C_att000_"
+scan_range = (6092, 6092) #Beamtime assigned scan IDs
 
 # Reference path: InputFiles/Feb2025_OnHeat_25C/VB-APS-SSAO-6_25C_TestMap-AO_000169.avg.tiff
  
@@ -74,8 +74,11 @@ def setup_logger(log_path, logger_name=None):
 
 
 def get_tif_file(scan_id):
-    return os.path.join(local_folder, isolated_mapscan_location, f"{beamtime_given_prefix}{scan_id:06d}.avg.tiff")
-    
+    if visit == "Feb2025": # 6 digit identifier in Feb
+        return os.path.join(local_folder, isolated_mapscan_location, f"{beamtime_given_prefix}{scan_id:06d}.avg.tiff") 
+    elif visit == "Oct2025": # 7 digit identifier in Oct., different naming at end
+        return os.path.join(local_folder, isolated_mapscan_location, f"{beamtime_given_prefix}{scan_id:07d}.tif")  
+
 
 def main():
     
@@ -121,10 +124,14 @@ def main():
     print("\n")
     for scan_id in range(scan_range[0], scan_range[1] + 1):
         indiv_file_path = get_tif_file(scan_id)
+        #print(indiv_file_path)
 
         # Skip missing frame files gracefully if a scan in the range was aborted/missing
         if not os.path.exists(indiv_file_path):
-            print(f"Warning: File not found for scan {scan_id:06d}, skipping...")
+            if visit == "Feb2025":
+                print(f"Warning: File not found for scan {scan_id:06d}, skipping...")
+            elif visit == "Oct2025":
+                print(f"Warning: File not found for scan {scan_id:07d}, skipping...")
             continue
 
         # Load image data
